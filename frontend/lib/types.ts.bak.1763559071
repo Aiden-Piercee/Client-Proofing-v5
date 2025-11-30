@@ -1,0 +1,35 @@
+export interface Album {
+  id: number;
+  title: string | null;
+  slug?: string;
+  visibility?: number | string;
+  created_on?: number;
+}
+
+export interface Image {
+  id: number;
+  title?: string | null;
+  caption?: string | null;
+  filename: string;
+  internal_id: string;
+  favorite: number;
+  visibility: number | string;
+
+  // REQUIRED FOR DISPLAY:
+  storage_path: string;
+}
+
+export interface SessionInfo {
+  id: number;
+  album_id: number;
+  client_name: string;
+  expires_at: string;
+}
+
+export type SelectionState = "favorite" | "maybe" | "reject" | null;
+
+export interface SelectionPayload {
+  sessionToken: string;
+  imageId: number;
+  state: SelectionState;
+}

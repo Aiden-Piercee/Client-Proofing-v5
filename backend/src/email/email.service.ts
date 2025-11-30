@@ -1,0 +1,92 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as nodemailer from 'nodemailer';
+import { Transporter } from 'nodemailer';
+
+export interface MagicLinkContext {
+  email: string;
+  clientName?: string;
+  albumTitle?: string;
+  link: string;
+}
+
+export interface EditedNotificationContext {
+  email: string;
+  originalId: number;
+  editedId: number;
+  albumTitle?: string;
+}
+
+@Injectable()
+export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
+  private readonly transporter: Transporter;
+  private readonly from: string;
+
+  constructor(configService: ConfigService) {
+    const host = configService.get<string>('SMTP_HOST');
+    const port = Number(configService.get<string>('SMTP_PORT') ?? 587);
+    const user = configService.get<string>('SMTP_USER');
+    const pass = configService.get<string>('SMTP_PASS');
+
+    this.from =
+      configService.get<string>('SMTP_FROM') ??
+      'no-reply@clientproofing.local';
+
+    this.transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: user && pass ? { user, pass } : undefined,
+    });
+  }
+
+  async sendMagicLink(context: MagicLinkContext) {
+    const body =
+      `Hello ${context.clientName ?? 'there'},\n\n` +
+      `You can access your ${context.albumTitle ?? 'album'} proofing gallery using the link below:\n` +
+      `${context.link}\n\n` +
+      `This link is unique to your email address and will expire automatically.`;
+
+    await this.sendEmail({
+      to: context.email,
+      subject: 'Your proofing link',
+      text: body,
+    });
+  }
+
+  async sendEditedNotification(context: EditedNotificationContext) {
+    const lines = [
+      `New edited photo available for ${context.albumTitle ?? 'your album'}.`,
+      `Original image ID: ${context.originalId}.`,
+      `Edited image ID: ${context.editedId}.`,
+      '',
+      'Visit your proofing link to view the updated image.',
+    ];
+
+    await this.sendEmail({
+      to: context.email,
+      subject: 'Edited photo available',
+      text: lines.join('\n'),
+    });
+  }
+
+  private async sendEmail(options: {
+    to: string;
+    subject: string;
+    text: string;
+  }) {
+    try {
+      await this.transporter.sendMail({
+        from: this.from,
+        to: options.to,
+        subject: options.subject,
+        text: options.text,
+      });
+      this.logger.log(`Sent email to ${options.to}: ${options.subject}`);
+    } catch (err) {
+      this.logger.error(`Failed sending email to ${options.to}`, err as Error);
+      throw err;
+    }
+  }
+}
