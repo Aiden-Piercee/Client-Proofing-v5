@@ -37,9 +37,9 @@ export default function SessionPage({ params }: Props) {
       setImages(imgs);
 
       const hero =
+        pickPreviewImage(imgs) ||
         (alb.cover_url as string | null) ||
-        (alb.featured_image as string | null) ||
-        pickPreviewImage(imgs);
+        (alb.featured_image as string | null);
 
       setBannerImage(hero);
       setAlbumImageUrls(imgs.map(makeDownloadURL));
@@ -121,6 +121,7 @@ function pickPreviewImage(imgs: Image[]) {
   if (!imgs.length) return null;
   const hero = imgs[0];
   return (
+    hero.full ||
     hero.large2x ||
     hero.large ||
     hero.medium2x ||
@@ -129,7 +130,8 @@ function pickPreviewImage(imgs: Image[]) {
     hero.small ||
     hero.thumb2x ||
     hero.thumb ||
-    hero.full ||
+    hero.tiny2x ||
+    hero.tiny ||
     null
   );
 }
