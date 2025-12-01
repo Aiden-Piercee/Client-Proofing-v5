@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Image } from "@/lib/types";
 import { getAlbumImages, sendSelection } from "@/lib/api";
 import ImageCard from "./ImageCard";
@@ -10,51 +10,31 @@ interface Props {
   albumId: number;
   sessionToken: string;
   sessionEmail?: string | null;
-
   selectedImages: string[];
   onSelectionChange: (imgs: string[]) => void;
 }
+
+type FilterType = "all" | "favorite" | "approved" | "rejected";
 
 export default function GalleryGrid({
   albumId,
   sessionToken,
   sessionEmail,
-  selectedImages: _selectedImages,
   onSelectionChange,
 }: Props) {
-  // Local state
   const [images, setImages] = useState<Image[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [marqueeRect, setMarqueeRect] = useState<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
-  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const dragSelectionRef = useRef<number[]>([]);
-  const rafRef = useRef<number | null>(null);
-  const pendingRectRef = useRef<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  } | null>(null);
-
-  // Load album images
   useEffect(() => {
     async function load() {
       try {
         setError(null);
         const imgs = await getAlbumImages(albumId, sessionToken);
         setImages(imgs);
-        setSelectedIds([]);
+        updateSelection(imgs);
       } catch (err: any) {
         setError(err?.message ?? "Unable to load images");
       } finally {
@@ -64,311 +44,124 @@ export default function GalleryGrid({
     load();
   }, [albumId, sessionToken]);
 
-  // Cache email for UX
   useEffect(() => {
     if (sessionEmail) {
       localStorage.setItem("clientproofing:email", sessionEmail);
     }
   }, [sessionEmail]);
 
-  // Build correct download URLs
   const makeDownloadURL = (img: Image): string => {
     let path = img.storage_path || "";
     let filename = img.filename || "";
-
     path = path.replace(/^\/+/, "");
-
     const alreadyContainsFile = path.endsWith(filename);
     const fullPath = alreadyContainsFile ? path : `${path}/${filename}`;
-
     return `http://clients.chasing.media/dl.php?src=/storage/originals/${fullPath}`;
   };
 
-  // Update image STATE
+  const updateSelection = (updatedImages: Image[]) => {
+    const selected = updatedImages
+      .filter((img) => img.state === "favorite" || img.state === "approved")
+      .map((img) => makeDownloadURL(img));
+    onSelectionChange(selected);
+  };
+
   const mark = async (
     id: number,
     state: "favorite" | "approved" | "rejected" | null
   ) => {
     const updated = images.map((img) =>
-      img.id === id
-        ? {
-            ...img,
-            state,
-            // Reject clears print
-            print: state === "rejected" ? false : img.print,
-          }
-        : img
+      img.id === id ? { ...img, state, print: state === "rejected" ? false : img.print } : img
     );
-
     setImages(updated);
-
+    updateSelection(updated);
     await sendSelection({ sessionToken, imageId: id, state });
   };
 
-  // Clear all flags on image (state + print)
   const clearAll = async (id: number) => {
     const updated = images.map((img) =>
-      img.id === id
-        ? {
-            ...img,
-            state: null,
-            print: false, // CLEAR PRINT ✔
-          }
-        : img
+      img.id === id ? { ...img, state: null, print: false } : img
     );
-
     setImages(updated);
-
+    updateSelection(updated);
     await sendSelection({ sessionToken, imageId: id, state: null, print: false });
   };
 
-  // Toggle print
   const togglePrint = async (id: number) => {
     const original = images.find((i) => i.id === id);
-    if (!original) return;
-
-    if (original.state === "rejected") return;
-
+    if (!original || original.state === "rejected") return;
     const updated = images.map((img) =>
       img.id === id ? { ...img, print: !img.print } : img
     );
-
     setImages(updated);
-
-    await sendSelection({
-      sessionToken,
-      imageId: id,
-      print: !original.print,
-    });
+    await sendSelection({ sessionToken, imageId: id, print: !original.print });
   };
 
-  useEffect(() => {
-    return () => {
-      window.removeEventListener("mousemove", handleMoveRef.current);
-      window.removeEventListener("mouseup", handleUpRef.current);
-
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-      }
-    };
-  }, []);
-
-  // Sync download URLs when selection or images change
-  useEffect(() => {
-    const selectedUrls = images
-      .filter((img) => selectedIds.includes(img.id))
-      .map((img) => makeDownloadURL(img));
-
-    onSelectionChange(selectedUrls);
-  }, [images, onSelectionChange, selectedIds]);
-
-  const toggleSingleSelection = (index: number) => {
-    const img = images[index];
-    if (!img) return;
-
-    setSelectedIds((prev) => {
-      const alreadySelected = prev.includes(img.id);
-      const next = alreadySelected
-        ? prev.filter((id) => id !== img.id)
-        : [...prev, img.id];
-
-      return next;
-    });
-    setLastSelectedIndex(index);
-  };
-
-  const handleRangeSelection = (index: number) => {
-    if (!images[index]) return;
-
-    const anchor = lastSelectedIndex ?? index;
-    const [start, end] =
-      anchor < index ? [anchor, index] : [index, anchor];
-
-    const idsInRange = images
-      .slice(start, end + 1)
-      .map((img) => img.id)
-      .filter(Boolean);
-
-    setSelectedIds((prev) => Array.from(new Set([...prev, ...idsInRange])));
-    setLastSelectedIndex(index);
-  };
-
-  const handleImageClick = (
-    event: React.MouseEvent,
-    index: number
-  ) => {
-    if (event.shiftKey) {
-      event.preventDefault();
-      handleRangeSelection(index);
-      return;
-    }
-
-    if (event.metaKey || event.ctrlKey) {
-      event.preventDefault();
-      toggleSingleSelection(index);
-      return;
-    }
-
-    open(index);
-  };
-
-  const normalizeRect = useCallback(
-    (startX: number, startY: number, currentX: number, currentY: number) => ({
-      left: Math.min(startX, currentX),
-      top: Math.min(startY, currentY),
-      width: Math.abs(currentX - startX),
-      height: Math.abs(currentY - startY),
-    }),
-    []
-  );
-
-  const applyMarqueeSelection = useCallback(
-    (rect: { left: number; top: number; width: number; height: number }) => {
-      if (!rect.width && !rect.height) return;
-
-      const intersectingIds = images.reduce<number[]>((acc, img, idx) => {
-        const card = cardRefs.current[idx];
-        if (!card) return acc;
-
-        const bounds = card.getBoundingClientRect();
-        const intersects =
-          rect.left < bounds.right &&
-          rect.left + rect.width > bounds.left &&
-          rect.top < bounds.bottom &&
-          rect.top + rect.height > bounds.top;
-
-        if (intersects) acc.push(img.id);
-        return acc;
-      }, []);
-
-      setSelectedIds((prev) => {
-        const startSelection = dragSelectionRef.current;
-        const merged = Array.from(new Set([...startSelection, ...intersectingIds]));
-        return merged;
-      });
-    },
-    [images]
-  );
-
-  const scheduleIntersectionCheck = useCallback(
-    (rect: { left: number; top: number; width: number; height: number }) => {
-      pendingRectRef.current = rect;
-
-      if (rafRef.current) return;
-
-      rafRef.current = window.requestAnimationFrame(() => {
-        rafRef.current = null;
-
-        if (pendingRectRef.current) {
-          applyMarqueeSelection(pendingRectRef.current);
-        }
-      });
-    },
-    [applyMarqueeSelection]
-  );
-
-  const handleMarqueeMouseMove = useCallback(
-    (startX: number, startY: number, event: MouseEvent) => {
-      const rect = normalizeRect(startX, startY, event.clientX, event.clientY);
-      setMarqueeRect(rect);
-      scheduleIntersectionCheck(rect);
-    },
-    [normalizeRect, scheduleIntersectionCheck]
-  );
-
-  const stopMarquee = useCallback(() => {
-    setMarqueeRect(null);
-    window.removeEventListener("mousemove", handleMoveRef.current);
-    window.removeEventListener("mouseup", handleUpRef.current);
-  }, []);
-
-  const handleMoveRef = useRef<(event: MouseEvent) => void>(() => {});
-  const handleUpRef = useRef<(event: MouseEvent) => void>(() => {});
-
-  const handleMarqueeMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-
-    const target = event.target as HTMLElement;
-    if (target.closest("[data-image-card]")) return;
-
-    event.preventDefault();
-
-    const startX = event.clientX;
-    const startY = event.clientY;
-
-    dragSelectionRef.current = [...selectedIds];
-    setMarqueeRect({ left: startX, top: startY, width: 0, height: 0 });
-
-    handleMoveRef.current = (e: MouseEvent) => handleMarqueeMouseMove(startX, startY, e);
-    handleUpRef.current = () => {
-      stopMarquee();
-    };
-
-    window.addEventListener("mousemove", handleMoveRef.current);
-    window.addEventListener("mouseup", handleUpRef.current);
-  };
-
-  // Lightbox controls
   const open = (index: number) => setCurrentIndex(index);
   const close = () => setCurrentIndex(null);
   const prev = () => setCurrentIndex((i) => (i! > 0 ? i! - 1 : images.length - 1));
   const next = () => setCurrentIndex((i) => (i! < images.length - 1 ? i! + 1 : 0));
 
-  // Loading / error
+  const filteredImages = useMemo(() => {
+    if (activeFilter === "all") return images;
+    return images.filter((img) => img.state === activeFilter);
+  }, [images, activeFilter]);
+
+  const stats = useMemo(
+    () => ({
+      favorites: images.filter((i) => i.state === "favorite").length,
+      approved: images.filter((i) => i.state === "approved").length,
+      rejected: images.filter((i) => i.state === "rejected").length,
+    }),
+    [images]
+  );
+
   if (loading)
-    return <div className="text-neutral-400 w-full text-center py-10">Loading...</div>;
+    return <div className="flex h-64 items-center justify-center text-neutral-400">Loading Gallery...</div>;
+  if (error) return <div className="flex h-64 items-center justify-center text-red-400">{error}</div>;
 
-  if (error)
-    return <div className="text-red-400 w-full text-center py-10">{error}</div>;
-
-  // Render
   return (
-    <>
-      {/* Thumbnails */}
-      <div
-        ref={containerRef}
-        className="relative"
-        onMouseDown={handleMarqueeMouseDown}
-      >
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-2 select-none">
-          {images.map((img, index) => (
-            <ImageCard
-              key={img.id}
-              image={img}
-              selected={selectedIds.includes(img.id)}
-              onClick={(event) => handleImageClick(event, index)}
-              onToggleSelect={() => toggleSingleSelection(index)}
-              onFavorite={() => mark(img.id, "favorite")}
-              onApprove={() => mark(img.id, "approved")}
-              onReject={() => mark(img.id, "rejected")}
-              onClear={() => clearAll(img.id)}      // FIXED ✔ clears print too
-              onPrint={() => togglePrint(img.id)}
-              cardRef={(el) => (cardRefs.current[index] = el)}
-            />
-          ))}
-        </div>
+    <div className="min-h-screen bg-white text-black dark:bg-neutral-950 dark:text-white pb-20">
+      <div className="sticky top-0 z-30 bg-white/90 dark:bg-neutral-950/90 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800 transition-all">
+        <div className="max-w-[1800px] mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center space-x-1">
+            <FilterBtn label="All Photos" count={images.length} isActive={activeFilter === "all"} onClick={() => setActiveFilter("all")} />
+            <FilterBtn label="Favorites" count={stats.favorites} isActive={activeFilter === "favorite"} onClick={() => setActiveFilter("favorite")} />
+            {stats.approved > 0 && (
+              <FilterBtn label="Approved" count={stats.approved} isActive={activeFilter === "approved"} onClick={() => setActiveFilter("approved")} />
+            )}
+          </div>
 
-        {marqueeRect && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              clipPath: `inset(0 0 0 0)`,
-            }}
-          >
-            <div
-              className="absolute border-2 border-emerald-400/80 bg-emerald-400/10 backdrop-blur-[1px] rounded-md shadow-[0_10px_30px_rgba(16,185,129,0.2)]"
-              style={{
-                left: marqueeRect.left - (containerRef.current?.getBoundingClientRect().left ?? 0),
-                top: marqueeRect.top - (containerRef.current?.getBoundingClientRect().top ?? 0),
-                width: marqueeRect.width,
-                height: marqueeRect.height,
-              }}
-            />
+          <div className="text-xs uppercase tracking-widest text-neutral-500 hidden sm:block">Proofing Selection</div>
+        </div>
+      </div>
+
+      <div className="max-w-[1800px] mx-auto p-4 sm:p-6">
+        {filteredImages.length === 0 ? (
+          <div className="text-center py-20 text-neutral-500 font-light">No images found in this filter.</div>
+        ) : (
+          <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-4 space-y-4">
+            {filteredImages.map((img) => {
+              const globalIndex = images.findIndex((i) => i.id === img.id);
+
+              return (
+                <div key={img.id} className="break-inside-avoid relative group mb-4">
+                  <ImageCard
+                    image={img}
+                    onClick={() => open(globalIndex)}
+                    onFavorite={() => mark(img.id, "favorite")}
+                    onApprove={() => mark(img.id, "approved")}
+                    onReject={() => mark(img.id, "rejected")}
+                    onClear={() => clearAll(img.id)}
+                    onPrint={() => togglePrint(img.id)}
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Lightbox */}
       {currentIndex !== null && (
         <Lightbox
           image={images[currentIndex]}
@@ -378,10 +171,35 @@ export default function GalleryGrid({
           onFavorite={(id) => mark(id, "favorite")}
           onApprove={(id) => mark(id, "approved")}
           onReject={(id) => mark(id, "rejected")}
-          onClear={(id) => clearAll(id)}         // FIXED ✔ clears print too
+          onClear={(id) => clearAll(id)}
           onPrint={(id) => togglePrint(id)}
         />
       )}
-    </>
+    </div>
+  );
+}
+
+function FilterBtn({
+  label,
+  count,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-200 ${
+        isActive
+          ? "bg-black text-white dark:bg-white dark:text-black shadow-md"
+          : "text-neutral-500 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800"
+      }`}
+    >
+      {label} <span className={`ml-1 text-xs opacity-60 ${isActive ? "" : "text-neutral-400"}`}>{count}</span>
+    </button>
   );
 }
