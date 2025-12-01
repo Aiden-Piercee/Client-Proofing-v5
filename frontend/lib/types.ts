@@ -6,6 +6,8 @@ export interface Album {
   created_on?: number;
   cover_id?: number | null;
   cover_url?: string | null;
+  featured_image?: string | null;
+  date?: string | Date | null;
 }
 
 export type SelectionState = "favorite" | "approved" | "rejected" | null;
