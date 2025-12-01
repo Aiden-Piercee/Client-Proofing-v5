@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Image } from "@/lib/types";
 import { getAlbumImages, sendSelection } from "@/lib/api";
 import ImageCard from "./ImageCard";
@@ -19,7 +19,7 @@ export default function GalleryGrid({
   albumId,
   sessionToken,
   sessionEmail,
-  selectedImages,
+  selectedImages: _selectedImages,
   onSelectionChange,
 }: Props) {
   // Local state
@@ -27,6 +27,25 @@ export default function GalleryGrid({
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [marqueeRect, setMarqueeRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const dragSelectionRef = useRef<number[]>([]);
+  const rafRef = useRef<number | null>(null);
+  const pendingRectRef = useRef<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
 
   // Load album images
   useEffect(() => {
@@ -35,7 +54,7 @@ export default function GalleryGrid({
         setError(null);
         const imgs = await getAlbumImages(albumId, sessionToken);
         setImages(imgs);
-        updateSelection(imgs);
+        setSelectedIds([]);
       } catch (err: any) {
         setError(err?.message ?? "Unable to load images");
       } finally {
@@ -65,15 +84,6 @@ export default function GalleryGrid({
     return `http://clients.chasing.media/dl.php?src=/storage/originals/${fullPath}`;
   };
 
-  // Update selection (only favorite + approved)
-  const updateSelection = (updatedImages: Image[]) => {
-    const selected = updatedImages
-      .filter((img) => img.state === "favorite" || img.state === "approved")
-      .map((img) => makeDownloadURL(img));
-
-    onSelectionChange(selected);
-  };
-
   // Update image STATE
   const mark = async (
     id: number,
@@ -91,7 +101,6 @@ export default function GalleryGrid({
     );
 
     setImages(updated);
-    updateSelection(updated);
 
     await sendSelection({ sessionToken, imageId: id, state });
   };
@@ -109,7 +118,6 @@ export default function GalleryGrid({
     );
 
     setImages(updated);
-    updateSelection(updated);
 
     await sendSelection({ sessionToken, imageId: id, state: null, print: false });
   };
@@ -134,6 +142,172 @@ export default function GalleryGrid({
     });
   };
 
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("mousemove", handleMoveRef.current);
+      window.removeEventListener("mouseup", handleUpRef.current);
+
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
+
+  // Sync download URLs when selection or images change
+  useEffect(() => {
+    const selectedUrls = images
+      .filter((img) => selectedIds.includes(img.id))
+      .map((img) => makeDownloadURL(img));
+
+    onSelectionChange(selectedUrls);
+  }, [images, onSelectionChange, selectedIds]);
+
+  const toggleSingleSelection = (index: number) => {
+    const img = images[index];
+    if (!img) return;
+
+    setSelectedIds((prev) => {
+      const alreadySelected = prev.includes(img.id);
+      const next = alreadySelected
+        ? prev.filter((id) => id !== img.id)
+        : [...prev, img.id];
+
+      return next;
+    });
+    setLastSelectedIndex(index);
+  };
+
+  const handleRangeSelection = (index: number) => {
+    if (!images[index]) return;
+
+    const anchor = lastSelectedIndex ?? index;
+    const [start, end] =
+      anchor < index ? [anchor, index] : [index, anchor];
+
+    const idsInRange = images
+      .slice(start, end + 1)
+      .map((img) => img.id)
+      .filter(Boolean);
+
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...idsInRange])));
+    setLastSelectedIndex(index);
+  };
+
+  const handleImageClick = (
+    event: React.MouseEvent,
+    index: number
+  ) => {
+    if (event.shiftKey) {
+      event.preventDefault();
+      handleRangeSelection(index);
+      return;
+    }
+
+    if (event.metaKey || event.ctrlKey) {
+      event.preventDefault();
+      toggleSingleSelection(index);
+      return;
+    }
+
+    open(index);
+  };
+
+  const normalizeRect = useCallback(
+    (startX: number, startY: number, currentX: number, currentY: number) => ({
+      left: Math.min(startX, currentX),
+      top: Math.min(startY, currentY),
+      width: Math.abs(currentX - startX),
+      height: Math.abs(currentY - startY),
+    }),
+    []
+  );
+
+  const applyMarqueeSelection = useCallback(
+    (rect: { left: number; top: number; width: number; height: number }) => {
+      if (!rect.width && !rect.height) return;
+
+      const intersectingIds = images.reduce<number[]>((acc, img, idx) => {
+        const card = cardRefs.current[idx];
+        if (!card) return acc;
+
+        const bounds = card.getBoundingClientRect();
+        const intersects =
+          rect.left < bounds.right &&
+          rect.left + rect.width > bounds.left &&
+          rect.top < bounds.bottom &&
+          rect.top + rect.height > bounds.top;
+
+        if (intersects) acc.push(img.id);
+        return acc;
+      }, []);
+
+      setSelectedIds((prev) => {
+        const startSelection = dragSelectionRef.current;
+        const merged = Array.from(new Set([...startSelection, ...intersectingIds]));
+        return merged;
+      });
+    },
+    [images]
+  );
+
+  const scheduleIntersectionCheck = useCallback(
+    (rect: { left: number; top: number; width: number; height: number }) => {
+      pendingRectRef.current = rect;
+
+      if (rafRef.current) return;
+
+      rafRef.current = window.requestAnimationFrame(() => {
+        rafRef.current = null;
+
+        if (pendingRectRef.current) {
+          applyMarqueeSelection(pendingRectRef.current);
+        }
+      });
+    },
+    [applyMarqueeSelection]
+  );
+
+  const handleMarqueeMouseMove = useCallback(
+    (startX: number, startY: number, event: MouseEvent) => {
+      const rect = normalizeRect(startX, startY, event.clientX, event.clientY);
+      setMarqueeRect(rect);
+      scheduleIntersectionCheck(rect);
+    },
+    [normalizeRect, scheduleIntersectionCheck]
+  );
+
+  const stopMarquee = useCallback(() => {
+    setMarqueeRect(null);
+    window.removeEventListener("mousemove", handleMoveRef.current);
+    window.removeEventListener("mouseup", handleUpRef.current);
+  }, []);
+
+  const handleMoveRef = useRef<(event: MouseEvent) => void>(() => {});
+  const handleUpRef = useRef<(event: MouseEvent) => void>(() => {});
+
+  const handleMarqueeMouseDown = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-image-card]")) return;
+
+    event.preventDefault();
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    dragSelectionRef.current = [...selectedIds];
+    setMarqueeRect({ left: startX, top: startY, width: 0, height: 0 });
+
+    handleMoveRef.current = (e: MouseEvent) => handleMarqueeMouseMove(startX, startY, e);
+    handleUpRef.current = () => {
+      stopMarquee();
+    };
+
+    window.addEventListener("mousemove", handleMoveRef.current);
+    window.addEventListener("mouseup", handleUpRef.current);
+  };
+
   // Lightbox controls
   const open = (index: number) => setCurrentIndex(index);
   const close = () => setCurrentIndex(null);
@@ -151,19 +325,47 @@ export default function GalleryGrid({
   return (
     <>
       {/* Thumbnails */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-2">
-        {images.map((img, index) => (
-          <ImageCard
-            key={img.id}
-            image={img}
-            onClick={() => open(index)}
-            onFavorite={() => mark(img.id, "favorite")}
-            onApprove={() => mark(img.id, "approved")}
-            onReject={() => mark(img.id, "rejected")}
-            onClear={() => clearAll(img.id)}      // FIXED ✔ clears print too
-            onPrint={() => togglePrint(img.id)}
-          />
-        ))}
+      <div
+        ref={containerRef}
+        className="relative"
+        onMouseDown={handleMarqueeMouseDown}
+      >
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 p-2 select-none">
+          {images.map((img, index) => (
+            <ImageCard
+              key={img.id}
+              image={img}
+              selected={selectedIds.includes(img.id)}
+              onClick={(event) => handleImageClick(event, index)}
+              onToggleSelect={() => toggleSingleSelection(index)}
+              onFavorite={() => mark(img.id, "favorite")}
+              onApprove={() => mark(img.id, "approved")}
+              onReject={() => mark(img.id, "rejected")}
+              onClear={() => clearAll(img.id)}      // FIXED ✔ clears print too
+              onPrint={() => togglePrint(img.id)}
+              cardRef={(el) => (cardRefs.current[index] = el)}
+            />
+          ))}
+        </div>
+
+        {marqueeRect && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              clipPath: `inset(0 0 0 0)`,
+            }}
+          >
+            <div
+              className="absolute border-2 border-emerald-400/80 bg-emerald-400/10 backdrop-blur-[1px] rounded-md shadow-[0_10px_30px_rgba(16,185,129,0.2)]"
+              style={{
+                left: marqueeRect.left - (containerRef.current?.getBoundingClientRect().left ?? 0),
+                top: marqueeRect.top - (containerRef.current?.getBoundingClientRect().top ?? 0),
+                width: marqueeRect.width,
+                height: marqueeRect.height,
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Lightbox */}
