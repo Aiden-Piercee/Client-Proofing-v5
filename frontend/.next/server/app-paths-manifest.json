@@ -3,9 +3,9 @@
   "/proofing/[albumId]/client/[session]/page": "app/proofing/[albumId]/client/[session]/page.js",
   "/proofing/[albumId]/page": "app/proofing/[albumId]/page.js",
   "/proofing/page": "app/proofing/page.js",
-  "/admin/dashboard/page": "app/admin/dashboard/page.js",
-  "/admin/albums/page": "app/admin/albums/page.js",
-  "/admin/page": "app/admin/page.js",
   "/admin/albums/[albumId]/page": "app/admin/albums/[albumId]/page.js",
+  "/admin/albums/page": "app/admin/albums/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/admin/page": "app/admin/page.js",
   "/admin/sessions/page": "app/admin/sessions/page.js"
 }
