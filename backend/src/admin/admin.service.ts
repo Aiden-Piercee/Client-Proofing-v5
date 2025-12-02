@@ -138,8 +138,13 @@ export class AdminService {
 
     await Promise.all(
       albumIds.map(async (albumId) => {
-        const album = await this.albumsService.getAlbum(albumId);
-        albumMap.set(albumId, album);
+        try {
+          const album = await this.albumsService.getAlbum(albumId);
+          albumMap.set(albumId, album);
+        } catch (error) {
+          // If an album is missing in Koken, keep the session but return a null album
+          albumMap.set(albumId, null);
+        }
       })
     );
 
