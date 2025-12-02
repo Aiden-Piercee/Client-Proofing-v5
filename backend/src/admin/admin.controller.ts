@@ -26,7 +26,8 @@ class CreateSessionDto {
 }
 
 class GenerateTokenDto {
-  album_id!: number;
+  album_id?: number;
+  album_ids?: number[];
   client_id?: number;
   client_name?: string;
   email?: string;
@@ -38,6 +39,12 @@ class TokenParam {
 
 class SessionParam {
   sessionId!: string;
+}
+
+class UpdateSessionDto {
+  album_id?: number;
+  client_id?: number | null;
+  client_name?: string | null;
 }
 
 class UpdateClientDto {
@@ -89,10 +96,16 @@ export class AdminController {
   }
 
   @UseGuards(AdminGuard)
+  @Get('token-management/resources')
+  async listTokenResources() {
+    return this.adminService.listTokenResources();
+  }
+
+  @UseGuards(AdminGuard)
   @Post('token-management/generate')
   async generateManagedToken(@Body() body: GenerateTokenDto) {
     return this.adminService.generateManagedToken({
-      albumId: body.album_id,
+      albumIds: body.album_ids ?? (body.album_id ? [body.album_id] : []),
       clientId: body.client_id,
       clientName: body.client_name ?? null,
       email: body.email ?? null,
@@ -101,14 +114,34 @@ export class AdminController {
 
   @UseGuards(AdminGuard)
   @Post('token-management/:token/albums')
-  async addAlbumToToken(@Param() params: TokenParam, @Body() body: CreateSessionDto) {
-    return this.adminService.linkAlbumToSessionToken(params.token, body.album_id);
+  async addAlbumToToken(
+    @Param() params: TokenParam,
+    @Body() body: { album_id?: number; album_ids?: number[] }
+  ) {
+    if (body.album_ids && body.album_ids.length > 0) {
+      return this.adminService.linkAlbumsToSessionToken(params.token, body.album_ids);
+    }
+
+    return this.adminService.linkAlbumToSessionToken(params.token, Number(body.album_id));
   }
 
   @UseGuards(AdminGuard)
   @Delete('token-management/session/:sessionId')
   async removeSession(@Param() params: SessionParam) {
     return this.adminService.removeSession(Number(params.sessionId));
+  }
+
+  @UseGuards(AdminGuard)
+  @Patch('token-management/session/:sessionId')
+  async updateSession(
+    @Param() params: SessionParam,
+    @Body() body: UpdateSessionDto,
+  ) {
+    return this.adminService.updateSessionDetails(Number(params.sessionId), {
+      albumId: body.album_id,
+      clientId: body.client_id,
+      clientName: body.client_name,
+    });
   }
 
   @UseGuards(AdminGuard)
