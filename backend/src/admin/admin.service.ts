@@ -1,4 +1,10 @@
-import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+  Inject
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PROOFING_DB } from '../config/database.config';
@@ -210,5 +216,363 @@ export class AdminService {
         })),
       };
     });
+  }
+
+  async generateManagedToken(options: {
+    albumIds: number[];
+    clientId?: number;
+    clientName?: string | null;
+    email?: string | null;
+  }) {
+    if (!options.albumIds || options.albumIds.length === 0) {
+      throw new BadRequestException('At least one album is required');
+    }
+
+    const [primaryAlbumId, ...additionalAlbumIds] = options.albumIds;
+    let tokenValue: string;
+
+    if (options.clientId) {
+      const created = await this.sessionsService.createSessionForClientId(
+        primaryAlbumId,
+        options.clientId,
+        options.clientName ?? null
+      );
+      tokenValue = created.token;
+    } else if (options.email) {
+      const created = await this.sessionsService.createSession(
+        primaryAlbumId,
+        options.email,
+        options.clientName ?? undefined
+      );
+      tokenValue = typeof created === 'string' ? created : created.token;
+    } else {
+      const created = await this.sessionsService.createAnonymousSession(primaryAlbumId);
+      tokenValue = created.token;
+    }
+
+    if (additionalAlbumIds.length > 0) {
+      await this.linkAlbumsToSessionToken(tokenValue, additionalAlbumIds);
+    }
+
+    const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, album_id, client_id, token, client_name, created_at
+      FROM client_sessions
+      WHERE token = ?
+      LIMIT 1
+      `,
+      [tokenValue]
+    );
+
+    const createdSession = sessionRows[0] as
+      | (RowDataPacket & {
+          id: number;
+          album_id: number;
+          client_id: number | null;
+          client_name: string | null;
+          created_at: Date;
+        })
+      | undefined;
+
+    return (
+      (createdSession && {
+        id: Number(createdSession.id),
+        album_id: Number(createdSession.album_id),
+        client_id: createdSession.client_id ? Number(createdSession.client_id) : null,
+        client_name: createdSession.client_name,
+        token: tokenValue,
+        created_at: createdSession.created_at,
+      }) || { token: tokenValue }
+    );
+  }
+
+  async linkAlbumToSessionToken(token: string, albumId: number) {
+    if (!albumId || Number.isNaN(albumId)) {
+      throw new BadRequestException('Album ID is required');
+    }
+
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT client_id
+      FROM client_sessions
+      WHERE token = ?
+      LIMIT 1
+      `,
+      [token]
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const session = rows[0] as RowDataPacket & { client_id: number | null };
+
+    if (!session.client_id) {
+      throw new BadRequestException('Session is not linked to a client');
+    }
+
+    return this.sessionsService.createSessionForClientId(
+      albumId,
+      session.client_id
+    );
+  }
+
+  async linkAlbumsToSessionToken(token: string, albumIds: number[]) {
+    for (const albumId of albumIds) {
+      await this.linkAlbumToSessionToken(token, albumId);
+    }
+  }
+
+  async removeSession(sessionId: number) {
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id
+      FROM client_sessions
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [sessionId]
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException('Session not found');
+    }
+
+    await this.proofDb.query('DELETE FROM client_sessions WHERE id = ?', [
+      sessionId,
+    ]);
+
+    return { removed: true };
+  }
+
+  async updateSessionDetails(
+    sessionId: number,
+    payload: { albumId?: number; clientId?: number | null; clientName?: string | null }
+  ) {
+    const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, album_id, client_id
+      FROM client_sessions
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [sessionId]
+    );
+
+    if (sessionRows.length === 0) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const session = sessionRows[0] as RowDataPacket & {
+      id: number;
+      album_id: number;
+      client_id: number | null;
+    };
+
+    if (payload.clientId !== undefined && payload.clientId !== null) {
+      const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+        `
+        SELECT id
+        FROM clients
+        WHERE id = ?
+        LIMIT 1
+        `,
+        [payload.clientId]
+      );
+
+      if (clientRows.length === 0) {
+        throw new NotFoundException('Client not found');
+      }
+    }
+
+    const updates: string[] = [];
+    const values: Array<number | string | null> = [];
+
+    if (typeof payload.albumId === 'number') {
+      updates.push('album_id = ?');
+      values.push(payload.albumId);
+    }
+
+    if (payload.clientId !== undefined) {
+      updates.push('client_id = ?');
+      values.push(payload.clientId);
+    }
+
+    if (payload.clientName !== undefined) {
+      updates.push('client_name = ?');
+      values.push(payload.clientName);
+    }
+
+    if (updates.length > 0) {
+      values.push(session.id);
+      await this.proofDb.query(
+        `UPDATE client_sessions SET ${updates.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
+
+    const [updatedRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, album_id, client_id, token, client_name, created_at
+      FROM client_sessions
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [sessionId]
+    );
+
+    if (updatedRows.length === 0) {
+      throw new NotFoundException('Session missing after update');
+    }
+
+    const updatedSession = updatedRows[0] as RowDataPacket & {
+      id: number;
+      album_id: number;
+      client_id: number | null;
+      token: string;
+      client_name: string | null;
+      created_at: Date;
+    };
+
+    return {
+      id: Number(updatedSession.id),
+      album_id: Number(updatedSession.album_id),
+      client_id: updatedSession.client_id ? Number(updatedSession.client_id) : null,
+      client_name: updatedSession.client_name,
+      token: updatedSession.token,
+      created_at: updatedSession.created_at,
+    };
+  }
+
+  async updateClientDetails(
+    clientId: number,
+    payload: { name?: string | null; email?: string | null }
+  ) {
+    const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email
+      FROM clients
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [clientId]
+    );
+
+    if (clientRows.length === 0) {
+      throw new NotFoundException('Client not found');
+    }
+
+    const updates: string[] = [];
+    const values: Array<string | number> = [];
+
+    if (typeof payload.name === 'string') {
+      updates.push('name = ?');
+      values.push(payload.name);
+    }
+
+    if (typeof payload.email === 'string' && payload.email.trim()) {
+      updates.push('email = ?');
+      values.push(payload.email.trim().toLowerCase());
+    }
+
+    if (updates.length > 0) {
+      values.push(clientId);
+      await this.proofDb.query(
+        `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
+
+    const [updatedRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email
+      FROM clients
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [clientId]
+    );
+
+    if (updatedRows.length === 0) {
+      throw new NotFoundException('Client missing after update');
+    }
+
+    return updatedRows[0] as RowDataPacket & {
+      id: number;
+      name: string | null;
+      email: string | null;
+    };
+  }
+
+  async listTokenResources() {
+    const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email
+      FROM clients
+      ORDER BY name ASC
+      `
+    );
+
+    const clients = (clientRows as Array<RowDataPacket & {
+      id: number;
+      name: string | null;
+      email: string | null;
+    }>).map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      email: row.email,
+    }));
+
+    const albums = await this.albumsService.listAlbums();
+    const sessions = await this.listSessions();
+
+    const albumMap = new Map<number, any>();
+    (albums as Array<RowDataPacket & { id: number }>).forEach((album) => {
+      albumMap.set(Number(album.id), album);
+    });
+
+    const albumSummaries = sessions.reduce(
+      (acc, session) => {
+        const existing = acc.get(session.album_id) ?? {
+          album_id: session.album_id,
+          album: albumMap.get(session.album_id) ?? null,
+          tokens: [] as Array<{
+            token: string;
+            client_name: string | null;
+            client_id: number | null;
+            created_at: Date | string;
+          }>;
+        };
+
+        existing.tokens.push({
+          token: session.token,
+          client_name: session.client_name,
+          client_id: session.client_id,
+          created_at: session.created_at,
+        });
+
+        acc.set(session.album_id, existing);
+        return acc;
+      },
+      new Map<
+        number,
+        {
+          album_id: number;
+          album: any;
+          tokens: Array<{
+            token: string;
+            client_name: string | null;
+            client_id: number | null;
+            created_at: Date | string;
+          }>;
+        }
+      >()
+    );
+
+    return {
+      clients,
+      albums,
+      albumSummaries: Array.from(albumSummaries.values()),
+    };
   }
 }
