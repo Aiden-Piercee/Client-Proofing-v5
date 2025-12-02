@@ -53,8 +53,25 @@ export default function SessionsPage() {
 
   const copyToClipboard = async (value: string | undefined | null, label: string) => {
     if (!value) return;
+
+    const copyWithFallback = () => {
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "absolute";
+      textarea.style.left = "-9999px";
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+    };
+
     try {
-      await navigator.clipboard.writeText(value);
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        copyWithFallback();
+      }
       alert(label);
     } catch (err) {
       alert("Unable to copy to clipboard");
