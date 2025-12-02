@@ -15,6 +15,9 @@ interface Album {
   title: string;
   images: any[];
   sessions: Session[];
+  cover_url?: string | null;
+  featured_image?: string | null;
+  image_count?: number | null;
 }
 
 export default function AdminAlbumDetailPage() {
@@ -24,6 +27,8 @@ export default function AdminAlbumDetailPage() {
   const [album, setAlbum] = useState<Album | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const heroImage = album?.cover_url || album?.featured_image || album?.images?.[0]?.public_url || "";
 
   // Load album from backend API
   useEffect(() => {
@@ -81,48 +86,94 @@ export default function AdminAlbumDetailPage() {
     }
   };
 
-  if (loading) return <p>Loading album…</p>;
-  if (error) return <p className="text-red-600">{error}</p>;
-  if (!album) return <p>Album not found.</p>;
+  if (loading) return <p className="text-neutral-300">Loading album…</p>;
+  if (error) return <p className="text-red-300">{error}</p>;
+  if (!album) return <p className="text-neutral-300">Album not found.</p>;
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold mb-4">{album.title}</h1>
+    <div className="space-y-8">
+      <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-2xl shadow-black/30">
+        {heroImage && (
+          <div className="absolute inset-0">
+            <img
+              src={heroImage}
+              alt="Album hero"
+              className="w-full h-full object-cover opacity-60"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent" />
+          </div>
+        )}
 
-      <button
-        className="bg-black text-white px-4 py-2 rounded"
-        onClick={generateMagicLink}
-      >
-        Generate Magic Link
-      </button>
+        <div className="relative p-8 lg:p-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-3">
+            <p className="text-xs uppercase tracking-[0.25em] text-neutral-300">Album</p>
+            <h1 className="text-3xl lg:text-4xl font-semibold text-white leading-tight">{album.title}</h1>
+            <p className="text-neutral-300">{album.image_count ?? album.images?.length ?? 0} images</p>
+          </div>
+
+          <button
+            className="relative inline-flex items-center justify-center px-5 py-3 rounded-xl overflow-hidden border border-white/20 bg-white/10 text-white font-semibold shadow-lg shadow-black/30 transition hover:-translate-y-0.5 hover:border-white/40"
+            onClick={generateMagicLink}
+          >
+            <span className="absolute inset-0 bg-gradient-to-r from-emerald-500/40 to-cyan-500/40 opacity-0 hover:opacity-100 transition" />
+            <span className="relative">Generate Magic Link</span>
+          </button>
+        </div>
+      </div>
 
       {/* Images */}
-      <h2 className="text-lg font-semibold mt-6 mb-2">Images</h2>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {album.images?.map((img) => (
-          <div key={img.id} className="border rounded overflow-hidden">
-            <img src={img.public_url} alt="" className="w-full h-auto" />
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-[0.25em] text-neutral-400">Images</p>
+            <h2 className="text-xl font-semibold text-white">Album Images</h2>
           </div>
-        ))}
-      </div>
+          <span className="text-sm text-neutral-400">{album.images?.length ?? 0} assets</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {album.images?.map((img) => (
+            <div
+              key={img.id}
+              className="group relative rounded-2xl overflow-hidden border border-white/10 bg-white/5 shadow-lg shadow-black/20"
+            >
+              <img src={img.public_url} alt="" className="w-full h-full object-cover aspect-[4/3]" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition" />
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* Sessions */}
-      <h2 className="text-lg font-semibold mt-6 mb-2">Existing Sessions</h2>
-      <div className="space-y-2">
-        {album.sessions.map((s) => (
-          <div key={s.id} className="bg-white p-3 rounded shadow">
-            <p>
-              <strong>Token:</strong> {s.token}
-            </p>
-            <p>
-              <strong>Email:</strong> {s.email || "(none yet)"}
-            </p>
-            <p>
-              <strong>Date:</strong> {s.created_at}
-            </p>
-          </div>
-        ))}
-      </div>
+      <section className="space-y-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.25em] text-neutral-400">Sessions</p>
+          <h2 className="text-xl font-semibold text-white">Existing Sessions</h2>
+        </div>
+        <div className="grid gap-3">
+          {album.sessions.map((s) => (
+            <div
+              key={s.id}
+              className="bg-white/5 border border-white/10 rounded-2xl p-4 shadow-lg shadow-black/20"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="space-y-1">
+                  <p className="text-sm text-neutral-400">Token</p>
+                  <p className="font-mono text-white break-all">{s.token}</p>
+                </div>
+                <div className="space-y-1 text-right">
+                  <p className="text-sm text-neutral-400">Created</p>
+                  <p className="text-white">
+                    {new Date(s.created_at).toLocaleString("en-US", { hour12: false })}
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-neutral-300 mt-3">
+                Email: <span className="font-semibold text-white">{s.email || "(none yet)"}</span>
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
