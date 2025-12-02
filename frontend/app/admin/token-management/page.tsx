@@ -352,7 +352,7 @@ export default function TokenManagementPage() {
             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Albums</span>
             <select
               multiple
-              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white h-32"
+              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white"
               value={generateForm.album_ids}
               onChange={(e) =>
                 updateGenerateForm(
