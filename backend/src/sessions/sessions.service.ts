@@ -1,13 +1,17 @@
 import {
+  BadRequestException,
   ForbiddenException,
+  forwardRef,
   Inject,
   Injectable,
   NotFoundException
 } from '@nestjs/common';
-import { Pool, RowDataPacket } from 'mysql2/promise';
+import { Pool } from 'mysql2/promise';
+import { RowDataPacket } from 'mysql2';
 import { PROOFING_DB } from '../config/database.config';
 import * as crypto from 'crypto';
 import { EmailService } from '../email/email.service';
+import { AlbumsService } from '../albums/albums.service';
 
 interface ClientRecord extends RowDataPacket {
   id: number;
@@ -20,7 +24,7 @@ export interface ClientSession extends RowDataPacket {
   album_id: number;
   client_id: number | null;
   token: string;
-  client_name: string;
+  client_name: string | null;
   email: string | null;
   expires_at: Date;
 }
@@ -29,7 +33,9 @@ export interface ClientSession extends RowDataPacket {
 export class SessionsService {
   constructor(
     @Inject(PROOFING_DB) private proofDb: Pool,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    @Inject(forwardRef(() => AlbumsService))
+    private readonly albumsService: AlbumsService
   ) {}
 
   /** ─────────────────────────────────────────────────────────────
@@ -116,8 +122,65 @@ export class SessionsService {
     return session;
   }
 
+  async getClientLanding(token: string) {
+    const session = await this.getValidSession(token);
+
+    if (!session.client_id) {
+      throw new BadRequestException('Session is not linked to a client.');
+    }
+
+    const [clientSessionRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, album_id, token, created_at
+      FROM client_sessions
+      WHERE client_id = ?
+      ORDER BY created_at DESC
+      `,
+      [session.client_id]
+    );
+
+    const typedSessions = clientSessionRows as Array<
+      RowDataPacket & {
+        id: number;
+        album_id: number;
+        token: string;
+        created_at: Date;
+      }
+    >;
+
+    const albumIds = Array.from(
+      new Set(typedSessions.map((s) => Number(s.album_id)))
+    );
+    const albumMap = new Map<number, any>();
+
+    await Promise.all(
+      albumIds.map(async (albumId) => {
+        const album = await this.albumsService.getAlbum(albumId);
+        albumMap.set(albumId, album);
+      })
+    );
+
+    const baseUrl = process.env.CLIENT_PROOFING_URL ?? '';
+
+    return {
+      client: {
+        id: session.client_id,
+        name: session.client_name,
+        email: session.email ?? null,
+      },
+      sessions: typedSessions.map((s) => ({
+        session_id: Number(s.id),
+        album_id: Number(s.album_id),
+        token: s.token,
+        album: albumMap.get(Number(s.album_id)) ?? null,
+        magic_url: `${baseUrl}/proofing/${s.album_id}/client/${s.token}`,
+      })),
+      landing_url: `${baseUrl}/proofing/landing/${token}`,
+    };
+  }
+
   private async getValidSession(token: string): Promise<ClientSession> {
-    const [rows] = await this.proofDb.query<ClientSession[]>(
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
       `
       SELECT cs.id, cs.album_id, cs.client_id, cs.token, cs.client_name,
              cs.expires_at, c.email
@@ -131,14 +194,14 @@ export class SessionsService {
     );
 
     if (rows.length === 0) throw new NotFoundException('Invalid session token');
-    return rows[0];
+    return rows[0] as ClientSession;
   }
 
   private async ensureClient(
     email: string,
     name?: string
   ): Promise<ClientRecord> {
-    const [rows] = await this.proofDb.query<ClientRecord[]>(
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
       `
       SELECT id, name, email
       FROM clients
@@ -149,7 +212,7 @@ export class SessionsService {
     );
 
     if (rows.length > 0) {
-      const existing = rows[0];
+      const existing = rows[0] as ClientRecord;
 
       if (name && !existing.name) {
         await this.proofDb.query(
