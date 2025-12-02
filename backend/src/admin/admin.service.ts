@@ -1,4 +1,10 @@
-import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+  Inject
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PROOFING_DB } from '../config/database.config';
@@ -210,5 +216,139 @@ export class AdminService {
         })),
       };
     });
+  }
+
+  async generateManagedToken(options: {
+    albumId: number;
+    clientId?: number;
+    clientName?: string | null;
+    email?: string | null;
+  }) {
+    if (options.clientId) {
+      return this.sessionsService.createSessionForClientId(
+        options.albumId,
+        options.clientId,
+        options.clientName ?? null
+      );
+    }
+
+    if (options.email) {
+      return this.sessionsService.createSession(
+        options.albumId,
+        options.email,
+        options.clientName ?? undefined
+      );
+    }
+
+    return this.sessionsService.createAnonymousSession(options.albumId);
+  }
+
+  async linkAlbumToSessionToken(token: string, albumId: number) {
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT client_id
+      FROM client_sessions
+      WHERE token = ?
+      LIMIT 1
+      `,
+      [token]
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException('Session not found');
+    }
+
+    const session = rows[0] as RowDataPacket & { client_id: number | null };
+
+    if (!session.client_id) {
+      throw new BadRequestException('Session is not linked to a client');
+    }
+
+    return this.sessionsService.createSessionForClientId(
+      albumId,
+      session.client_id
+    );
+  }
+
+  async removeSession(sessionId: number) {
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id
+      FROM client_sessions
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [sessionId]
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException('Session not found');
+    }
+
+    await this.proofDb.query('DELETE FROM client_sessions WHERE id = ?', [
+      sessionId,
+    ]);
+
+    return { removed: true };
+  }
+
+  async updateClientDetails(
+    clientId: number,
+    payload: { name?: string | null; email?: string | null }
+  ) {
+    const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email
+      FROM clients
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [clientId]
+    );
+
+    if (clientRows.length === 0) {
+      throw new NotFoundException('Client not found');
+    }
+
+    const updates: string[] = [];
+    const values: Array<string | number> = [];
+
+    if (typeof payload.name === 'string') {
+      updates.push('name = ?');
+      values.push(payload.name);
+    }
+
+    if (typeof payload.email === 'string' && payload.email.trim()) {
+      updates.push('email = ?');
+      values.push(payload.email.trim().toLowerCase());
+    }
+
+    if (updates.length > 0) {
+      values.push(clientId);
+      await this.proofDb.query(
+        `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
+
+    const [updatedRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email
+      FROM clients
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [clientId]
+    );
+
+    if (updatedRows.length === 0) {
+      throw new NotFoundException('Client missing after update');
+    }
+
+    return updatedRows[0] as RowDataPacket & {
+      id: number;
+      name: string | null;
+      email: string | null;
+    };
   }
 }
