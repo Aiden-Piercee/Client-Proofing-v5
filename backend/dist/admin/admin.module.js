@@ -8,25 +8,37 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminModule = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
+const jwt_1 = require("@nestjs/jwt");
 const admin_controller_1 = require("./admin.controller");
 const admin_service_1 = require("./admin.service");
-const jwt_1 = require("@nestjs/jwt");
-const sessions_module_1 = require("../sessions/sessions.module");
+const admin_guard_1 = require("./guards/admin.guard");
 const albums_module_1 = require("../albums/albums.module");
 const database_module_1 = require("../database/database.module");
-const admin_guard_1 = require("./guards/admin.guard");
+const sessions_module_1 = require("../sessions/sessions.module");
 let AdminModule = class AdminModule {
 };
 exports.AdminModule = AdminModule;
 exports.AdminModule = AdminModule = __decorate([
     (0, common_1.Module)({
         imports: [
+            config_1.ConfigModule,
             database_module_1.DatabaseModule,
             sessions_module_1.SessionsModule,
             albums_module_1.AlbumsModule,
-            jwt_1.JwtModule.register({
-                secret: process.env.ADMIN_JWT_SECRET,
-                signOptions: { expiresIn: '2h' }
+            jwt_1.JwtModule.registerAsync({
+                imports: [config_1.ConfigModule],
+                inject: [config_1.ConfigService],
+                useFactory: (configService) => {
+                    const secret = configService.get('ADMIN_JWT_SECRET');
+                    if (!secret) {
+                        throw new Error('ADMIN_JWT_SECRET must be configured for admin access.');
+                    }
+                    return {
+                        secret,
+                        signOptions: { expiresIn: '2h' }
+                    };
+                }
             })
         ],
         controllers: [admin_controller_1.AdminController],

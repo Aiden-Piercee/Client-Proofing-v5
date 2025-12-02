@@ -1,14 +1,16 @@
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { Pool } from 'mysql2/promise';
 import { RowDataPacket } from 'mysql2';
 import { SessionsService } from '../sessions/sessions.service';
 import { AlbumsService } from '../albums/albums.service';
 export declare class AdminService {
-    private jwtService;
+    private readonly configService;
+    private readonly jwtService;
     private proofDb;
     private sessionsService;
     private albumsService;
-    constructor(jwtService: JwtService, proofDb: Pool, sessionsService: SessionsService, albumsService: AlbumsService);
+    constructor(configService: ConfigService, jwtService: JwtService, proofDb: Pool, sessionsService: SessionsService, albumsService: AlbumsService);
     login(username: string, password: string): Promise<{
         token: string;
     }>;

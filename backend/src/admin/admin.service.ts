@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PROOFING_DB } from '../config/database.config';
 import { Pool } from 'mysql2/promise';
@@ -9,16 +10,24 @@ import { AlbumsService } from '../albums/albums.service';
 @Injectable()
 export class AdminService {
   constructor(
-    private jwtService: JwtService,
+    private readonly configService: ConfigService,
+    private readonly jwtService: JwtService,
     @Inject(PROOFING_DB) private proofDb: Pool,
     private sessionsService: SessionsService,
     private albumsService: AlbumsService,
   ) {}
 
   async login(username: string, password: string) {
+    const adminUser = this.configService.get<string>('ADMIN_USER');
+    const adminPass = this.configService.get<string>('ADMIN_PASS');
+
+    if (!adminUser || !adminPass) {
+      throw new UnauthorizedException('Admin credentials are not configured.');
+    }
+
     if (
-      username !== process.env.ADMIN_USER ||
-      password !== process.env.ADMIN_PASS
+      username !== adminUser ||
+      password !== adminPass
     ) {
       throw new UnauthorizedException('Invalid credentials');
     }
