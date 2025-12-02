@@ -14,20 +14,27 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AdminService = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const jwt_1 = require("@nestjs/jwt");
 const database_config_1 = require("../config/database.config");
 const sessions_service_1 = require("../sessions/sessions.service");
 const albums_service_1 = require("../albums/albums.service");
 let AdminService = class AdminService {
-    constructor(jwtService, proofDb, sessionsService, albumsService) {
+    constructor(configService, jwtService, proofDb, sessionsService, albumsService) {
+        this.configService = configService;
         this.jwtService = jwtService;
         this.proofDb = proofDb;
         this.sessionsService = sessionsService;
         this.albumsService = albumsService;
     }
     async login(username, password) {
-        if (username !== process.env.ADMIN_USER ||
-            password !== process.env.ADMIN_PASS) {
+        const adminUser = this.configService.get('ADMIN_USER');
+        const adminPass = this.configService.get('ADMIN_PASS');
+        if (!adminUser || !adminPass) {
+            throw new common_1.UnauthorizedException('Admin credentials are not configured.');
+        }
+        if (username !== adminUser ||
+            password !== adminPass) {
             throw new common_1.UnauthorizedException('Invalid credentials');
         }
         const token = this.jwtService.sign({ username });
@@ -70,8 +77,9 @@ let AdminService = class AdminService {
 exports.AdminService = AdminService;
 exports.AdminService = AdminService = __decorate([
     (0, common_1.Injectable)(),
-    __param(1, (0, common_1.Inject)(database_config_1.PROOFING_DB)),
-    __metadata("design:paramtypes", [jwt_1.JwtService, Object, sessions_service_1.SessionsService,
+    __param(2, (0, common_1.Inject)(database_config_1.PROOFING_DB)),
+    __metadata("design:paramtypes", [config_1.ConfigService,
+        jwt_1.JwtService, Object, sessions_service_1.SessionsService,
         albums_service_1.AlbumsService])
 ], AdminService);
 //# sourceMappingURL=admin.service.js.map
