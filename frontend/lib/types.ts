@@ -97,3 +97,18 @@ export interface AdminSession {
   landing_magic_url?: string;
   client_albums?: ClientLandingAlbum[];
 }
+
+export interface AdminTokenResources {
+  clients: Array<{ id: number; name: string | null; email: string | null }>;
+  albums: Album[];
+  albumSummaries: Array<{
+    album_id: number;
+    album: Album | null;
+    tokens: Array<{
+      token: string;
+      client_name: string | null;
+      client_id: number | null;
+      created_at: string | Date;
+    }>;
+  }>;
+}
