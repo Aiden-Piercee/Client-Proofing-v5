@@ -1,4 +1,4 @@
-import { Album, Image, SessionInfo, SelectionPayload } from "./types";
+import { Album, ClientLanding, Image, SessionInfo, SelectionPayload } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:3700";
 
@@ -36,6 +36,10 @@ export function getAlbum(albumId: number): Promise<Album> {
 
 export function getAlbumImages(albumId: number, sessionToken: string): Promise<Image[]> {
   return apiGet(`/albums/${albumId}/images?sessionToken=${sessionToken}`);
+}
+
+export function getClientLanding(token: string): Promise<ClientLanding> {
+  return apiGet(`/client/session/${token}/albums`);
 }
 
 // ---- Selections ----

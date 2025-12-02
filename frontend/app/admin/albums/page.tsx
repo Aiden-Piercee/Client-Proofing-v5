@@ -71,7 +71,9 @@ export default function AdminAlbumsPage() {
               <div className="relative h-44 bg-neutral-900">
                 <img
                   src={al.cover_url || NEUTRAL_PLACEHOLDER}
+                  srcSet={`${al.cover_url || NEUTRAL_PLACEHOLDER} 1x, ${al.cover_url || NEUTRAL_PLACEHOLDER} 2x`}
                   alt="Album cover"
+                  loading="lazy"
                   className="absolute inset-0 w-full h-full object-cover"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />

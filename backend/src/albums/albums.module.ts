@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AlbumsService } from './albums.service';
 import { AlbumsController } from './albums.controller';
 import { KokenModule } from '../koken/koken.module';
@@ -9,7 +9,7 @@ import { SessionsModule } from '../sessions/sessions.module';  // ✅ ADD THIS
   imports: [
     DatabaseModule,
     KokenModule,
-    SessionsModule,     // ✅ CRITICAL
+    forwardRef(() => SessionsModule),     // ✅ CRITICAL
   ],
   controllers: [AlbumsController],
   providers: [AlbumsService],
