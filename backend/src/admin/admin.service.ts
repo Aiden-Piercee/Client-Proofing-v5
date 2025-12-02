@@ -244,7 +244,7 @@ export class AdminService {
         options.email,
         options.clientName ?? undefined
       );
-      tokenValue = typeof created === 'string' ? created : created.token;
+      tokenValue = created;
     } else {
       const created = await this.sessionsService.createAnonymousSession(primaryAlbumId);
       tokenValue = created.token;
@@ -541,7 +541,7 @@ export class AdminService {
             client_name: string | null;
             client_id: number | null;
             created_at: Date | string;
-          }>;
+          }>,
         };
 
         existing.tokens.push({
