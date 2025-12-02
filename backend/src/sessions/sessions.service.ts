@@ -110,6 +110,49 @@ export class SessionsService {
     return { token, link };
   }
 
+  async createSessionForClientId(
+    albumId: number,
+    clientId: number,
+    clientName?: string | null
+  ) {
+    const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email
+      FROM clients
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [clientId]
+    );
+
+    if (clientRows.length === 0) {
+      throw new NotFoundException('Client not found');
+    }
+
+    const client = clientRows[0] as RowDataPacket & {
+      id: number;
+      name: string | null;
+      email: string | null;
+    };
+
+    const token = crypto.randomBytes(16).toString('hex');
+
+    await this.proofDb.query(
+      `
+      INSERT INTO client_sessions (album_id, client_id, token, client_name, expires_at)
+      VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
+      `,
+      [
+        albumId,
+        client.id,
+        token,
+        clientName ?? client.name ?? client.email ?? 'Client'
+      ]
+    );
+
+    return { token, album_id: albumId, client_id: client.id };
+  }
+
   async validateSession(token: string) {
     return await this.getValidSession(token);
   }
