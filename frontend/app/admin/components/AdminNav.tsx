@@ -1,10 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+
+const navItems = [
+  { href: "/admin/dashboard", label: "Dashboard" },
+  { href: "/admin/albums", label: "Albums" },
+  { href: "/admin/sessions", label: "Sessions" },
+];
 
 export default function AdminNav() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const logout = () => {
     localStorage.removeItem("admin_token");
@@ -12,30 +19,46 @@ export default function AdminNav() {
   };
 
   return (
-    <aside className="w-64 bg-white shadow-md p-4 space-y-4">
-      <h1 className="text-xl font-bold mb-4">Admin</h1>
+    <aside className="w-72 bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-6 shadow-2xl shadow-black/30 sticky top-8 h-fit">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-xs uppercase tracking-[0.3em] text-neutral-400">Admin</p>
+          <h1 className="text-2xl font-semibold text-white">ClientProofing</h1>
+        </div>
+        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.15)]" aria-hidden />
+      </div>
 
-      <nav className="flex flex-col space-y-2">
-        <Link href="/admin/dashboard" className="text-neutral-700 hover:text-black">
-          Dashboard
-        </Link>
+      <nav className="space-y-2">
+        {navItems.map((item) => {
+          const active = pathname?.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex items-center justify-between rounded-xl px-4 py-3 border transition ${
+                active
+                  ? "border-white/25 bg-white/10 text-white shadow-lg shadow-black/20"
+                  : "border-white/5 text-neutral-300 hover:text-white hover:border-white/15 hover:bg-white/5"
+              }`}
+            >
+              <span className="font-medium">{item.label}</span>
+              <span
+                className={`h-2 w-2 rounded-full ${active ? "bg-white" : "bg-white/30"}`}
+                aria-hidden
+              />
+            </Link>
+          );
+        })}
+      </nav>
 
-        <Link href="/admin/albums" className="text-neutral-700 hover:text-black">
-          Albums
-        </Link>
-
-        <Link href="/admin/sessions" className="text-neutral-700 hover:text-black">
-          Sessions
-        </Link>
-
-        {/* 🔥 LOGOUT BUTTON */}
+      <div className="pt-6 mt-6 border-t border-white/10">
         <button
           onClick={logout}
-          className="text-left text-red-600 hover:text-red-800 mt-4"
+          className="w-full bg-gradient-to-r from-red-500 to-rose-600 text-white font-semibold py-2.5 rounded-xl shadow-lg shadow-rose-900/40 hover:from-red-400 hover:to-rose-500 transition"
         >
           Logout
         </button>
-      </nav>
+      </div>
     </aside>
   );
 }
