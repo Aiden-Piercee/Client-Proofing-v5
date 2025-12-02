@@ -12,6 +12,14 @@ export interface Album {
 
 export type SelectionState = "favorite" | "approved" | "rejected" | null;
 
+export interface ImageSelectionSummary {
+  client_id: number;
+  client_name: string | null;
+  email: string | null;
+  state: SelectionState;
+  print: boolean;
+}
+
 export interface Image {
   id: number;
   title?: string | null;
@@ -37,6 +45,8 @@ export interface Image {
   state?: SelectionState;
   edited?: Image | null;
 
+  selections?: ImageSelectionSummary[];
+
   print?: boolean; // ✅ Added print flag
 }
 
@@ -55,4 +65,35 @@ export interface SelectionPayload {
 
   state?: SelectionState; // already existed
   print?: boolean;        // ✅ NEW
+}
+
+export interface ClientLandingAlbum {
+  session_id: number;
+  album_id: number;
+  token: string;
+  album: Album | null;
+  magic_url: string;
+}
+
+export interface ClientLanding {
+  client: {
+    id: number;
+    name: string | null;
+    email: string | null;
+  };
+  sessions: ClientLandingAlbum[];
+  landing_url: string;
+}
+
+export interface AdminSession {
+  id: number;
+  token: string;
+  album_id: number;
+  client_id: number | null;
+  client_name: string | null;
+  email: string | null;
+  created_at: string | Date;
+  album?: Album | null;
+  landing_magic_url?: string;
+  client_albums?: ClientLandingAlbum[];
 }

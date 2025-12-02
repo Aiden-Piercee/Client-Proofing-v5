@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { ImageSelectionSummary, SelectionState } from "@/lib/types";
 
 interface Session {
   id: number;
@@ -13,11 +14,18 @@ interface Session {
 interface Album {
   id: number;
   title: string;
-  images: any[];
+  images: AlbumImage[];
   sessions: Session[];
   cover_url?: string | null;
   featured_image?: string | null;
   image_count?: number | null;
+}
+
+interface AlbumImage {
+  id: number;
+  title?: string | null;
+  public_url?: string | null;
+  selections?: ImageSelectionSummary[];
 }
 
 export default function AdminAlbumDetailPage() {
@@ -99,6 +107,7 @@ export default function AdminAlbumDetailPage() {
               src={heroImage}
               alt="Album hero"
               className="w-full h-full object-cover opacity-60"
+              loading="lazy"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent" />
           </div>
@@ -130,14 +139,46 @@ export default function AdminAlbumDetailPage() {
           </div>
           <span className="text-sm text-neutral-400">{album.images?.length ?? 0} assets</span>
         </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-300">
+          <LegendPill tone="bg-pink-500/20" border="border-pink-400/40" label="❤️ Favorite" />
+          <LegendPill tone="bg-emerald-500/20" border="border-emerald-400/40" label="✔️ Approved" />
+          <LegendPill tone="bg-red-500/20" border="border-red-400/40" label="❌ Rejected" />
+          <LegendPill tone="bg-amber-500/20" border="border-amber-300/40" label="🖨️ Print requested" />
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {album.images?.map((img) => (
             <div
               key={img.id}
               className="group relative rounded-2xl overflow-hidden border border-white/10 bg-white/5 shadow-lg shadow-black/20"
             >
-              <img src={img.public_url} alt="" className="w-full h-full object-cover aspect-[4/3]" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition" />
+              <img src={img.public_url || ""} alt="" className="w-full h-full object-cover aspect-[4/3]" loading="lazy" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition" />
+              <div className="absolute inset-x-3 bottom-3 space-y-1 text-xs">
+                {img.selections && img.selections.length > 0 ? (
+                  img.selections.map((sel, idx) => (
+                    <div
+                      key={`${img.id}-${sel.client_id}-${sel.state}-${idx}`}
+                      className="flex items-center gap-2 rounded-xl bg-black/60 px-3 py-2 backdrop-blur"
+                    >
+                      <span className={`${badgeTone(sel.state)} text-white px-2 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1`}>
+                        {stateIcon(sel.state)} {stateLabel(sel.state)}
+                      </span>
+                      <span className="text-neutral-200 truncate">
+                        {sel.client_name || sel.email || "Client"}
+                      </span>
+                      {sel.print && (
+                        <span className="ml-auto text-amber-200 text-[11px] bg-amber-600/30 border border-amber-300/40 px-2 py-1 rounded-lg">
+                          🖨️ Print
+                        </span>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-neutral-200">
+                    No selections yet
+                  </span>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -175,5 +216,36 @@ export default function AdminAlbumDetailPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function stateLabel(state: SelectionState | null) {
+  if (state === "favorite") return "Favorite";
+  if (state === "approved") return "Approved";
+  if (state === "rejected") return "Rejected";
+  return "No state";
+}
+
+function stateIcon(state: SelectionState | null) {
+  if (state === "favorite") return "❤️";
+  if (state === "approved") return "✔️";
+  if (state === "rejected") return "❌";
+  return "•";
+}
+
+function badgeTone(state: SelectionState | null) {
+  if (state === "favorite") return "bg-pink-500/30 border border-pink-300/40";
+  if (state === "approved") return "bg-emerald-500/30 border border-emerald-300/40";
+  if (state === "rejected") return "bg-red-600/40 border border-red-300/40";
+  return "bg-white/20 border border-white/30";
+}
+
+function LegendPill({ tone, border, label }: { tone: string; border: string; label: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 font-medium ${tone} ${border} text-white/90 backdrop-blur`}
+    >
+      {label}
+    </span>
   );
 }

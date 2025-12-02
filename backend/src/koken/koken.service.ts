@@ -77,7 +77,13 @@ export class KokenService {
     return normalized.map((album) => {
       const cover = album.cover_id ? coverImages.get(album.cover_id) : null;
       const cover_url =
-        cover?.thumb ?? cover?.medium ?? cover?.full ?? this.neutralPlaceholder;
+        cover?.large2x ??
+        cover?.full ??
+        cover?.large ??
+        cover?.medium2x ??
+        cover?.medium ??
+        cover?.thumb ??
+        this.neutralPlaceholder;
 
       return { ...album, cover_url } as EnrichedAlbum;
     });

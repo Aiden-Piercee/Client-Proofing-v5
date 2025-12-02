@@ -23,6 +23,11 @@ export class SessionsController {
     return this.service.sendMagicLink(albumId, email, clientName, albumTitle);
   }
 
+  @Get('session/:token/albums')
+  async landing(@Param('token') token: string) {
+    return this.service.getClientLanding(token);
+  }
+
   @Get('session/:token')
   async validate(@Param('token') token: string) {
     return this.service.validateSession(token);
