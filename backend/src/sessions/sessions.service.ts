@@ -44,6 +44,7 @@ export class SessionsService {
    *  ───────────────────────────────────────────────────────────── */
   async createAnonymousSession(albumId: number) {
     const token = crypto.randomBytes(16).toString('hex');
+    const baseUrl = this.getBaseUrl();
 
     await this.proofDb.query(
       `
@@ -56,7 +57,7 @@ export class SessionsService {
     return {
       album_id: albumId,
       token,
-      magic_url: `${process.env.CLIENT_PROOFING_URL}/proofing/${albumId}/client/${token}`
+      magic_url: `${baseUrl}/proofing/${albumId}/client/${token}`
     };
   }
 
@@ -97,7 +98,7 @@ export class SessionsService {
     albumTitle?: string
   ) {
     const token = await this.createSession(albumId, email, clientName);
-    const baseUrl = process.env.CLIENT_PROOFING_URL ?? '';
+    const baseUrl = this.getBaseUrl();
     const link = `${baseUrl}/proofing/${albumId}/client/${token}`;
 
     await this.emailService.sendMagicLink({
@@ -203,7 +204,7 @@ export class SessionsService {
       })
     );
 
-    const baseUrl = process.env.CLIENT_PROOFING_URL ?? '';
+    const baseUrl = this.getBaseUrl();
 
     return {
       client: {
@@ -220,6 +221,13 @@ export class SessionsService {
       })),
       landing_url: `${baseUrl}/proofing/landing/${token}`,
     };
+  }
+
+  private getBaseUrl() {
+    const configuredBase =
+      process.env.CLIENT_PROOFING_URL || process.env.FRONTEND_URL || '';
+
+    return configuredBase.replace(/\/$/, '');
   }
 
   private async getValidSession(token: string): Promise<ClientSession> {

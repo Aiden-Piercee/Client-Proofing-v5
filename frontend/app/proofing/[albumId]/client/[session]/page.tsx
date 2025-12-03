@@ -29,7 +29,7 @@ export default function SessionPage({ params }: Props) {
   useEffect(() => {
     async function load() {
       const session = await validateSession(sessionToken);
-      const alb = await getAlbum(albumId);
+      const alb = await getAlbum(albumId, sessionToken);
       const imgs = await getAlbumImages(albumId, sessionToken);
 
       setSessionInfo(session);
