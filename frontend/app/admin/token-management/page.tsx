@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AdminSession, AdminTokenResources, Album } from "@/lib/types";
+import {
+  AdminSession,
+  AdminTokenResources,
+  Album,
+  ClientLandingAlbum,
+} from "@/lib/types";
 
 interface GenerateFormState {
   album_ids: string[];
@@ -16,7 +21,7 @@ interface ClientEditState {
 }
 
 interface SessionEditState {
-  album_id: string;
+  album_ids: string[];
   client_id: string;
   client_name: string;
 }
@@ -81,8 +86,16 @@ export default function TokenManagementPage() {
           };
         }
 
+        const uniqueAlbumIds = Array.from(
+          new Set(
+            (session.client_albums ?? [{ album_id: session.album_id }]).map((s) =>
+              String(s.album_id)
+            )
+          )
+        );
+
         sessionEditMap[session.id] = {
-          album_id: String(session.album_id ?? ""),
+          album_ids: uniqueAlbumIds,
           client_id: session.client_id ? String(session.client_id) : "",
           client_name: session.client_name ?? "",
         };
@@ -291,9 +304,42 @@ export default function TokenManagementPage() {
       const token = localStorage.getItem("admin_token");
       if (!token) throw new Error("Missing admin token");
 
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) throw new Error("Session not found in state");
+
       const edits = sessionEdits[sessionId];
+      const selectedAlbumIds = new Set(
+        (edits?.album_ids ?? [])
+          .map((id) => Number(id))
+          .filter((id) => !Number.isNaN(id))
+      );
+
+      const clientAlbums: ClientLandingAlbum[] =
+        session.client_albums && session.client_albums.length > 0
+          ? session.client_albums
+          : [
+              {
+                album_id: session.album_id,
+                session_id: session.id,
+                token: session.token,
+                album: session.album ?? null,
+                magic_url: "",
+              },
+            ];
+
+      const existingAlbumIds = new Set(clientAlbums.map((ca) => ca.album_id));
+      const albumsToAdd = Array.from(selectedAlbumIds).filter(
+        (id) => !existingAlbumIds.has(id)
+      );
+      const albumsToRemove = clientAlbums
+        .filter((ca) => !selectedAlbumIds.has(ca.album_id))
+        .map((ca) => ca.session_id);
+
+      if (!session.client_id && albumsToAdd.length > 0) {
+        throw new Error("Link a client before adding galleries");
+      }
+
       const payload: any = {
-        album_id: edits?.album_id ? Number(edits.album_id) : undefined,
         client_id: edits?.client_id ? Number(edits.client_id) : null,
         client_name: edits?.client_name ?? null,
       };
@@ -308,6 +354,32 @@ export default function TokenManagementPage() {
       });
 
       if (!res.ok) throw new Error("Unable to update session");
+
+      if (albumsToAdd.length > 0) {
+        const addRes = await fetch(`${API}/admin/token-management/${session.token}/albums`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ album_ids: albumsToAdd }),
+        });
+
+        if (!addRes.ok) throw new Error("Unable to link selected albums");
+      }
+
+      if (albumsToRemove.length > 0) {
+        await Promise.all(
+          albumsToRemove.map(async (removeId) => {
+            const deleteRes = await fetch(`${API}/admin/token-management/session/${removeId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+
+            if (!deleteRes.ok) throw new Error("Unable to remove deselected albums");
+          })
+        );
+      }
       await loadSessions();
     } catch (err: any) {
       console.error(err);
@@ -488,6 +560,19 @@ export default function TokenManagementPage() {
                 <div className="grid gap-3">
                   {clientSessions.map((session) => {
                     const sessionEdit = sessionEdits[session.id];
+                    const albumSummaries = Array.from(
+                      new Map(
+                        (session.client_albums ?? [
+                          {
+                            album_id: session.album_id,
+                            session_id: session.id,
+                            token: session.token,
+                            album: session.album ?? null,
+                            magic_url: session.landing_magic_url ?? "",
+                          },
+                        ]).map((a) => [a.album_id, a])
+                      ).values()
+                    );
                     return (
                       <div
                         key={session.id}
@@ -497,9 +582,38 @@ export default function TokenManagementPage() {
                           <div className="space-y-1">
                             <p className="text-xs uppercase tracking-[0.25em] text-neutral-500">Token</p>
                             <p className="font-mono text-sm text-white break-all">{session.token}</p>
-                            <p className="text-neutral-400 text-xs">
-                              Album #{session.album_id}
-                            </p>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {albumSummaries.map((album) => {
+                                const cover = (album.album as Album | null)?.cover_url ??
+                                  (album.album as Album | null)?.featured_image ??
+                                  null;
+
+                                return (
+                                  <div
+                                    key={`${session.id}-${album.album_id}`}
+                                    className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/30 px-2 py-1"
+                                  >
+                                    {cover ? (
+                                      <img
+                                        src={cover}
+                                        alt={(album.album as Album | null)?.title ?? `Album #${album.album_id}`}
+                                        className="h-10 w-10 rounded object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-10 w-10 rounded bg-white/5 flex items-center justify-center text-[10px] text-neutral-400 border border-white/10">
+                                        #{album.album_id}
+                                      </div>
+                                    )}
+                                    <div>
+                                      <p className="text-xs text-white font-medium">
+                                        {(album.album as Album | null)?.title ?? `Album #${album.album_id}`}
+                                      </p>
+                                      <p className="text-[10px] text-neutral-400">ID #{album.album_id}</p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2">
                             <a
@@ -520,14 +634,18 @@ export default function TokenManagementPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <div className="flex flex-col gap-1 text-sm text-neutral-300">
-                            <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Album</span>
+                            <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Albums</span>
                             <select
-                              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white"
-                              value={sessionEdit?.album_id ?? ""}
+                              multiple
+                              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white min-h-[120px]"
+                              value={sessionEdit?.album_ids ?? []}
                               onChange={(e) =>
                                 setSessionEdits((prev) => ({
                                   ...prev,
-                                  [session.id]: { ...prev[session.id], album_id: e.target.value },
+                                  [session.id]: {
+                                    ...prev[session.id],
+                                    album_ids: Array.from(e.target.selectedOptions).map((opt) => opt.value),
+                                  },
                                 }))
                               }
                             >
@@ -537,6 +655,7 @@ export default function TokenManagementPage() {
                                 </option>
                               ))}
                             </select>
+                            <span className="text-xs text-neutral-400">Hold Ctrl/⌘ to select multiple galleries.</span>
                           </div>
                           <div className="flex flex-col gap-1 text-sm text-neutral-300">
                             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Linked client</span>
