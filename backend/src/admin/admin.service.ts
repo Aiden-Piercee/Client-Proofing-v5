@@ -456,7 +456,7 @@ export class AdminService {
       clientIdToLink !== undefined
     ) {
       const clientUpdates: string[] = [];
-      const clientValues: Array<string | number> = [];
+      const clientValues: Array<string | number | null> = [];
 
       if (payload.clientName !== undefined) {
         clientUpdates.push('name = ?');
