@@ -9,7 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PROOFING_DB } from '../config/database.config';
 import { Pool } from 'mysql2/promise';
-import { RowDataPacket } from 'mysql2';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { SessionsService } from '../sessions/sessions.service';
 import { AlbumsService } from '../albums/albums.service';
 
@@ -88,6 +88,7 @@ export class AdminService {
         medium?: string | null;
         large?: string | null;
         full?: string | null;
+        filename?: string | null;
       }
     >;
 
@@ -98,6 +99,7 @@ export class AdminService {
       medium: img.medium ?? null,
       large: img.large ?? null,
       full: img.full ?? null,
+      filename: img.filename ?? null,
       public_url: img.medium ?? img.thumb ?? img.full ?? null,
       selections: selectionMap.get(Number(img.id)) ?? [],
     }));
@@ -229,28 +231,106 @@ export class AdminService {
     }
 
     const [primaryAlbumId, ...additionalAlbumIds] = options.albumIds;
-    let tokenValue: string;
+    let tokenValue: string | null = null;
+    let clientId: number | null = null;
 
     if (options.clientId) {
-      const created = await this.sessionsService.createSessionForClientId(
-        primaryAlbumId,
-        options.clientId,
-        options.clientName ?? null
+      const existingToken = await this.sessionsService.findLatestTokenForClient(
+        options.clientId
       );
-      tokenValue = created.token;
+
+      if (existingToken) {
+        tokenValue = existingToken;
+        clientId = options.clientId;
+        await this.sessionsService.addAlbumToExistingToken(tokenValue, primaryAlbumId);
+      } else {
+        const created = await this.sessionsService.createSessionForClientId(
+          primaryAlbumId,
+          options.clientId,
+          options.clientName ?? null
+        );
+        tokenValue = created.token;
+        clientId = created.client_id;
+      }
     } else if (options.email) {
-      const created = await this.sessionsService.createSession(
-        primaryAlbumId,
-        options.email,
-        options.clientName ?? undefined
+      const normalizedEmail = options.email.trim().toLowerCase();
+      const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+        `
+        SELECT id, name
+        FROM clients
+        WHERE LOWER(email) = ?
+        LIMIT 1
+        `,
+        [normalizedEmail]
       );
-      tokenValue = created;
+
+      const existingClient = clientRows[0] as
+        | (RowDataPacket & { id: number; name: string | null })
+        | undefined;
+
+      if (existingClient) {
+        clientId = Number(existingClient.id);
+
+        if (options.clientName && !existingClient.name) {
+          await this.proofDb.query(
+            `UPDATE clients SET name = ? WHERE id = ?`,
+            [options.clientName, existingClient.id]
+          );
+        }
+      } else {
+        const [insert] = await this.proofDb.query<ResultSetHeader>(
+          `
+          INSERT INTO clients (name, email, created_at)
+          VALUES (?, ?, NOW())
+          `,
+          [options.clientName ?? null, normalizedEmail]
+        );
+
+        clientId = Number(insert.insertId);
+      }
+
+      if (clientId !== null) {
+        const existingToken = await this.sessionsService.findLatestTokenForClient(clientId);
+        if (existingToken) {
+          tokenValue = existingToken;
+          await this.sessionsService.addAlbumToExistingToken(tokenValue, primaryAlbumId);
+        }
+      }
+
+      if (!tokenValue) {
+        const created = await this.sessionsService.createSession(
+          primaryAlbumId,
+          normalizedEmail,
+          options.clientName ?? undefined
+        );
+        tokenValue = created;
+
+        const [createdRows] = await this.proofDb.query<RowDataPacket[]>(
+          `
+          SELECT client_id
+          FROM client_sessions
+          WHERE token = ?
+          LIMIT 1
+          `,
+          [tokenValue]
+        );
+
+        const createdSession = createdRows[0] as
+          | (RowDataPacket & { client_id: number | null })
+          | undefined;
+
+        clientId = createdSession?.client_id ?? clientId;
+      }
     } else {
       const created = await this.sessionsService.createAnonymousSession(primaryAlbumId);
       tokenValue = created.token;
     }
 
-    if (additionalAlbumIds.length > 0) {
+    if (!tokenValue) {
+      throw new BadRequestException('Unable to generate or locate a session token');
+    }
+
+    if (additionalAlbumIds.length > 0 && clientId) {
       await this.linkAlbumsToSessionToken(tokenValue, additionalAlbumIds);
     }
 
@@ -291,30 +371,7 @@ export class AdminService {
       throw new BadRequestException('Album ID is required');
     }
 
-    const [rows] = await this.proofDb.query<RowDataPacket[]>(
-      `
-      SELECT client_id
-      FROM client_sessions
-      WHERE token = ?
-      LIMIT 1
-      `,
-      [token]
-    );
-
-    if (rows.length === 0) {
-      throw new NotFoundException('Session not found');
-    }
-
-    const session = rows[0] as RowDataPacket & { client_id: number | null };
-
-    if (!session.client_id) {
-      throw new BadRequestException('Session is not linked to a client');
-    }
-
-    return this.sessionsService.createSessionForClientId(
-      albumId,
-      session.client_id
-    );
+    return this.sessionsService.addAlbumToExistingToken(token, albumId);
   }
 
   async linkAlbumsToSessionToken(token: string, albumIds: number[]) {
@@ -420,7 +477,7 @@ export class AdminService {
           );
         }
       } else {
-        const [insert] = await this.proofDb.query<any>(
+        const [insert] = await this.proofDb.query<ResultSetHeader>(
           `
           INSERT INTO clients (name, email, created_at)
           VALUES (?, ?, NOW())
@@ -428,7 +485,7 @@ export class AdminService {
           [payload.clientName ?? null, normalizedEmail]
         );
 
-        clientIdToLink = insert.insertId as number;
+        clientIdToLink = Number(insert.insertId);
       }
     }
 
