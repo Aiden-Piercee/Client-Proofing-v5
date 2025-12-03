@@ -45,6 +45,7 @@ class UpdateSessionDto {
   album_id?: number;
   client_id?: number | null;
   client_name?: string | null;
+  client_email?: string | null;
 }
 
 class UpdateClientDto {
@@ -141,6 +142,7 @@ export class AdminController {
       albumId: body.album_id,
       clientId: body.client_id,
       clientName: body.client_name,
+      clientEmail: body.client_email,
     });
   }
 

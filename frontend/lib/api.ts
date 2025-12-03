@@ -30,8 +30,9 @@ export function getAlbums(): Promise<Album[]> {
 }
 
 // ---- Album ----
-export function getAlbum(albumId: number): Promise<Album> {
-  return apiGet(`/albums/${albumId}`);
+export function getAlbum(albumId: number, sessionToken?: string): Promise<Album> {
+  const tokenQuery = sessionToken ? `?sessionToken=${sessionToken}` : '';
+  return apiGet(`/albums/${albumId}${tokenQuery}`);
 }
 
 export function getAlbumImages(albumId: number, sessionToken: string): Promise<Image[]> {

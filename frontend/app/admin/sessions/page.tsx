@@ -17,6 +17,19 @@ export default function SessionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
 
+  const absoluteUrl = (path?: string | null) => {
+    if (!path) return "";
+    if (/^https?:\/\//i.test(path)) return path;
+
+    const origin =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+
+    if (!origin) return path;
+
+    return `${origin}${path.startsWith("/") ? "" : "/"}${path}`;
+  };
+
   useEffect(() => {
     async function load() {
       try {
@@ -80,11 +93,8 @@ export default function SessionsPage() {
   };
 
   const landingLink = (session: AdminSession) => {
-    if (session.landing_magic_url) return session.landing_magic_url;
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}/proofing/landing/${session.token}`;
-    }
-    return "";
+    if (session.landing_magic_url) return absoluteUrl(session.landing_magic_url);
+    return absoluteUrl(`/proofing/landing/${session.token}`);
   };
 
   if (loading) return <p className="text-neutral-300">Loading sessions…</p>;
@@ -171,7 +181,7 @@ export default function SessionsPage() {
                         <div className="flex flex-wrap gap-2 mt-2">
                           <button
                             className="text-xs inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-white hover:bg-white/20 transition"
-                            onClick={() => copyToClipboard(album.magic_url, "Magic link copied")}
+                            onClick={() => copyToClipboard(absoluteUrl(album.magic_url), "Magic link copied")}
                           >
                             ✉️ Magic link
                           </button>
