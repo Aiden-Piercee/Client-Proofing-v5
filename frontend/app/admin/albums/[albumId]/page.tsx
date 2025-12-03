@@ -26,6 +26,7 @@ interface AlbumImage {
   title?: string | null;
   public_url?: string | null;
   selections?: ImageSelectionSummary[];
+  filename?: string | null;
 }
 
 export default function AdminAlbumDetailPage() {
@@ -35,6 +36,7 @@ export default function AdminAlbumDetailPage() {
   const [album, setAlbum] = useState<Album | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [markedFilenames, setMarkedFilenames] = useState<string>("");
 
   const heroImage = album?.cover_url || album?.featured_image || album?.images?.[0]?.public_url || "";
 
@@ -94,6 +96,34 @@ export default function AdminAlbumDetailPage() {
     }
   };
 
+  const generateMarkedFilenames = async () => {
+    if (!album) return;
+
+    const filenames = (album.images ?? [])
+      .filter((img) => img.selections?.some((sel) => !!sel.state || sel.print))
+      .map((img) => img.filename)
+      .filter((name): name is string => !!name && name.trim().length > 0);
+
+    if (filenames.length === 0) {
+      setMarkedFilenames("");
+      alert("No marked images found for this gallery yet.");
+      return;
+    }
+
+    setMarkedFilenames(filenames.join(", "));
+  };
+
+  const copyMarkedFilenames = async () => {
+    if (!markedFilenames) return;
+    try {
+      await navigator.clipboard.writeText(markedFilenames);
+      alert("Filenames copied to clipboard");
+    } catch (err) {
+      console.error(err);
+      alert("Unable to copy filenames");
+    }
+  };
+
   if (loading) return <p className="text-neutral-300">Loading album…</p>;
   if (error) return <p className="text-red-300">{error}</p>;
   if (!album) return <p className="text-neutral-300">Album not found.</p>;
@@ -138,6 +168,33 @@ export default function AdminAlbumDetailPage() {
             <h2 className="text-xl font-semibold text-white">Album Images</h2>
           </div>
           <span className="text-sm text-neutral-400">{album.images?.length ?? 0} assets</span>
+        </div>
+        <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/5 p-4 shadow-lg shadow-black/20">
+          <div className="flex flex-wrap items-center gap-3 justify-between">
+            <p className="text-sm text-neutral-200">Generate Lightroom-compatible filename list for marked images.</p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold px-3 py-2 rounded-lg shadow-md shadow-black/30 disabled:opacity-60"
+                onClick={generateMarkedFilenames}
+                disabled={loading}
+              >
+                Build filename list
+              </button>
+              <button
+                className="border border-white/20 text-white rounded-lg px-3 py-2 text-sm hover:border-white/40 disabled:opacity-60"
+                onClick={copyMarkedFilenames}
+                disabled={!markedFilenames}
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+          <textarea
+            className="w-full rounded-lg bg-black/40 border border-white/10 text-white text-sm p-3 min-h-[80px]"
+            readOnly
+            value={markedFilenames}
+            placeholder="Marked filenames will appear here after generation"
+          />
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-neutral-300">
           <LegendPill tone="bg-pink-500/20" border="border-pink-400/40" label="❤️ Favorite" />

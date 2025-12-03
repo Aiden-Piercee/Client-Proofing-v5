@@ -7,7 +7,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { Pool } from 'mysql2/promise';
-import { RowDataPacket } from 'mysql2';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { PROOFING_DB } from '../config/database.config';
 import * as crypto from 'crypto';
 import { EmailService } from '../email/email.service';
@@ -114,7 +114,8 @@ export class SessionsService {
   async createSessionForClientId(
     albumId: number,
     clientId: number,
-    clientName?: string | null
+    clientName?: string | null,
+    token?: string
   ) {
     const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
       `
@@ -136,7 +137,7 @@ export class SessionsService {
       email: string | null;
     };
 
-    const token = crypto.randomBytes(16).toString('hex');
+    const tokenValue = token ?? crypto.randomBytes(16).toString('hex');
 
     await this.proofDb.query(
       `
@@ -146,12 +147,73 @@ export class SessionsService {
       [
         albumId,
         client.id,
-        token,
+        tokenValue,
         clientName ?? client.name ?? client.email ?? 'Client'
       ]
     );
 
-    return { token, album_id: albumId, client_id: client.id };
+    return { token: tokenValue, album_id: albumId, client_id: client.id };
+  }
+
+  async addAlbumToExistingToken(token: string, albumId: number) {
+    if (!token) {
+      throw new BadRequestException('Token is required');
+    }
+
+    const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT client_id, client_name
+      FROM client_sessions
+      WHERE token = ?
+      LIMIT 1
+      `,
+      [token]
+    );
+
+    if (sessionRows.length === 0) {
+      throw new NotFoundException('Session not found for token');
+    }
+
+    const session = sessionRows[0] as RowDataPacket & {
+      client_id: number | null;
+      client_name: string | null;
+    };
+
+    if (!session.client_id) {
+      throw new BadRequestException('Session is not linked to a client.');
+    }
+
+    const [existingRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id
+      FROM client_sessions
+      WHERE token = ? AND album_id = ?
+      LIMIT 1
+      `,
+      [token, albumId]
+    );
+
+    if (existingRows.length > 0) {
+      return {
+        token,
+        album_id: albumId,
+        client_id: Number(session.client_id),
+      };
+    }
+
+    await this.proofDb.query(
+      `
+      INSERT INTO client_sessions (album_id, client_id, token, client_name, expires_at)
+      VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
+      `,
+      [albumId, session.client_id, token, session.client_name ?? null]
+    );
+
+    return {
+      token,
+      album_id: albumId,
+      client_id: Number(session.client_id),
+    };
   }
 
   async validateSession(token: string) {
@@ -159,8 +221,8 @@ export class SessionsService {
   }
 
   async assertSessionForAlbum(token: string, albumId: number) {
-    const session = await this.getValidSession(token);
-    if (session.album_id !== albumId) {
+    const session = await this.getValidSession(token, albumId);
+    if (!session) {
       throw new ForbiddenException('Session token is not valid for this album.');
     }
     return session;
@@ -230,7 +292,10 @@ export class SessionsService {
     return configuredBase.replace(/\/$/, '');
   }
 
-  private async getValidSession(token: string): Promise<ClientSession> {
+  private async getValidSession(
+    token: string,
+    albumId?: number
+  ): Promise<ClientSession> {
     const [rows] = await this.proofDb.query<RowDataPacket[]>(
       `
       SELECT cs.id, cs.album_id, cs.client_id, cs.token, cs.client_name,
@@ -238,10 +303,11 @@ export class SessionsService {
       FROM client_sessions cs
       LEFT JOIN clients c ON c.id = cs.client_id
       WHERE token = ?
+        ${typeof albumId === 'number' ? 'AND album_id = ?' : ''}
         AND (expires_at IS NULL OR expires_at > NOW())
       LIMIT 1
       `,
-      [token]
+      typeof albumId === 'number' ? [token, albumId] : [token]
     );
 
     if (rows.length === 0) throw new NotFoundException('Invalid session token');
@@ -276,7 +342,7 @@ export class SessionsService {
       return existing;
     }
 
-    const [insert] = await this.proofDb.query<any>(
+    const [insert] = await this.proofDb.query<ResultSetHeader>(
       `
       INSERT INTO clients (name, email, created_at)
       VALUES (?, ?, NOW())
@@ -289,5 +355,26 @@ export class SessionsService {
       name: name ?? null,
       email
     } as ClientRecord;
+  }
+
+  async findLatestTokenForClient(clientId: number): Promise<string | null> {
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT token
+      FROM client_sessions
+      WHERE client_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [clientId]
+    );
+
+    if (rows.length === 0) {
+      return null;
+    }
+
+    const session = rows[0] as RowDataPacket & { token: string | null };
+
+    return session.token ?? null;
   }
 }
