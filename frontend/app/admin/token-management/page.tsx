@@ -24,6 +24,7 @@ interface SessionEditState {
   album_ids: string[];
   client_id: string;
   client_name: string;
+  client_email: string;
 }
 
 export default function TokenManagementPage() {
@@ -45,6 +46,19 @@ export default function TokenManagementPage() {
   const [clientFilter, setClientFilter] = useState("");
 
   const API = process.env.NEXT_PUBLIC_API_URL;
+
+  const absoluteUrl = (path?: string | null) => {
+    if (!path) return "";
+    if (/^https?:\/\//i.test(path)) return path;
+
+    const origin =
+      process.env.NEXT_PUBLIC_SITE_URL ||
+      (typeof window !== "undefined" ? window.location.origin : "");
+
+    if (!origin) return path;
+
+    return `${origin}${path.startsWith("/") ? "" : "/"}${path}`;
+  };
 
   const loadResources = async () => {
     if (!API) throw new Error("NEXT_PUBLIC_API_URL missing");
@@ -98,6 +112,7 @@ export default function TokenManagementPage() {
           album_ids: uniqueAlbumIds,
           client_id: session.client_id ? String(session.client_id) : "",
           client_name: session.client_name ?? "",
+          client_email: session.email ?? "",
         };
       });
       setClientEdits(edits);
@@ -342,6 +357,7 @@ export default function TokenManagementPage() {
       const payload: any = {
         client_id: edits?.client_id ? Number(edits.client_id) : null,
         client_name: edits?.client_name ?? null,
+        client_email: edits?.client_email?.trim() ? edits.client_email.trim() : null,
       };
 
       const res = await fetch(`${API}/admin/token-management/session/${sessionId}`, {
@@ -617,7 +633,7 @@ export default function TokenManagementPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <a
-                              href={session.landing_magic_url ?? "#"}
+                            href={absoluteUrl(session.landing_magic_url)}
                               className="text-sm bg-white/10 border border-white/20 text-white rounded-lg px-3 py-2 hover:bg-white/20"
                             >
                               Landing link
@@ -632,7 +648,7 @@ export default function TokenManagementPage() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                           <div className="flex flex-col gap-1 text-sm text-neutral-300">
                             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Albums</span>
                             <select
@@ -660,15 +676,28 @@ export default function TokenManagementPage() {
                           <div className="flex flex-col gap-1 text-sm text-neutral-300">
                             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Linked client</span>
                             <select
-                              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white"
-                              value={sessionEdit?.client_id ?? ""}
-                              onChange={(e) =>
-                                setSessionEdits((prev) => ({
+                            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white"
+                            value={sessionEdit?.client_id ?? ""}
+                            onChange={(e) =>
+                              setSessionEdits((prev) => {
+                                const selectedClient = resources?.clients.find(
+                                  (c) => String(c.id) === e.target.value
+                                );
+
+                                return {
                                   ...prev,
-                                  [session.id]: { ...prev[session.id], client_id: e.target.value },
-                                }))
-                              }
-                            >
+                                  [session.id]: {
+                                    ...prev[session.id],
+                                    client_id: e.target.value,
+                                    client_name:
+                                      selectedClient?.name ?? prev[session.id].client_name,
+                                    client_email:
+                                      selectedClient?.email ?? prev[session.id].client_email,
+                                  },
+                                };
+                              })
+                            }
+                          >
                               <option value="">-- No client --</option>
                               {(resources?.clients ?? []).map((client) => (
                                 <option key={client.id} value={client.id}>
@@ -684,6 +713,16 @@ export default function TokenManagementPage() {
                               setSessionEdits((prev) => ({
                                 ...prev,
                                 [session.id]: { ...prev[session.id], client_name: v },
+                              }))
+                            }
+                          />
+                          <LabeledInput
+                            label="Session client email"
+                            value={sessionEdit?.client_email ?? ""}
+                            onChange={(v) =>
+                              setSessionEdits((prev) => ({
+                                ...prev,
+                                [session.id]: { ...prev[session.id], client_email: v },
                               }))
                             }
                           />

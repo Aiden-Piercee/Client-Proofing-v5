@@ -192,7 +192,7 @@ export class AdminService {
       );
     }
 
-    const baseUrl = process.env.CLIENT_PROOFING_URL ?? '';
+    const baseUrl = this.getBaseUrl();
 
     return typedRows.map((row) => {
       const relatedSessions = row.client_id
@@ -347,7 +347,12 @@ export class AdminService {
 
   async updateSessionDetails(
     sessionId: number,
-    payload: { albumId?: number; clientId?: number | null; clientName?: string | null }
+    payload: {
+      albumId?: number;
+      clientId?: number | null;
+      clientName?: string | null;
+      clientEmail?: string | null;
+    }
   ) {
     const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
       `
@@ -385,6 +390,48 @@ export class AdminService {
       }
     }
 
+    let clientIdToLink =
+      payload.clientId !== undefined ? payload.clientId : session.client_id;
+
+    if (payload.clientEmail && payload.clientEmail.trim()) {
+      const normalizedEmail = payload.clientEmail.trim().toLowerCase();
+      const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+        `
+        SELECT id, name
+        FROM clients
+        WHERE LOWER(email) = ?
+        LIMIT 1
+        `,
+        [normalizedEmail]
+      );
+
+      if (clientRows.length > 0) {
+        const existing = clientRows[0] as RowDataPacket & {
+          id: number;
+          name: string | null;
+        };
+
+        clientIdToLink = Number(existing.id);
+
+        if (payload.clientName && !existing.name) {
+          await this.proofDb.query(
+            `UPDATE clients SET name = ? WHERE id = ?`,
+            [payload.clientName, existing.id]
+          );
+        }
+      } else {
+        const [insert] = await this.proofDb.query<any>(
+          `
+          INSERT INTO clients (name, email, created_at)
+          VALUES (?, ?, NOW())
+          `,
+          [payload.clientName ?? null, normalizedEmail]
+        );
+
+        clientIdToLink = insert.insertId as number;
+      }
+    }
+
     const updates: string[] = [];
     const values: Array<number | string | null> = [];
 
@@ -393,14 +440,41 @@ export class AdminService {
       values.push(payload.albumId);
     }
 
-    if (payload.clientId !== undefined) {
+    if (payload.clientId !== undefined || payload.clientEmail) {
       updates.push('client_id = ?');
-      values.push(payload.clientId);
+      values.push(clientIdToLink ?? null);
     }
 
     if (payload.clientName !== undefined) {
       updates.push('client_name = ?');
       values.push(payload.clientName);
+    }
+
+    if (
+      (payload.clientName !== undefined || (payload.clientEmail && payload.clientEmail.trim())) &&
+      clientIdToLink !== null &&
+      clientIdToLink !== undefined
+    ) {
+      const clientUpdates: string[] = [];
+      const clientValues: Array<string | number> = [];
+
+      if (payload.clientName !== undefined) {
+        clientUpdates.push('name = ?');
+        clientValues.push(payload.clientName ?? null);
+      }
+
+      if (payload.clientEmail && payload.clientEmail.trim()) {
+        clientUpdates.push('email = ?');
+        clientValues.push(payload.clientEmail.trim().toLowerCase());
+      }
+
+      if (clientUpdates.length > 0) {
+        clientValues.push(clientIdToLink);
+        await this.proofDb.query(
+          `UPDATE clients SET ${clientUpdates.join(', ')} WHERE id = ?`,
+          clientValues,
+        );
+      }
     }
 
     if (updates.length > 0) {
@@ -502,6 +576,13 @@ export class AdminService {
       name: string | null;
       email: string | null;
     };
+  }
+
+  private getBaseUrl() {
+    const configuredBase =
+      process.env.CLIENT_PROOFING_URL || process.env.FRONTEND_URL || '';
+
+    return configuredBase.replace(/\/$/, '');
   }
 
   async listTokenResources() {
