@@ -363,7 +363,7 @@ export class SessionsService {
         AND (cs.expires_at IS NULL OR cs.expires_at > NOW())
       LIMIT 1
       `,
-      [token]
+      typeof albumId === 'number' ? [token, albumId] : [token]
     );
 
     if (rows.length === 0) throw new NotFoundException('Invalid session token');
