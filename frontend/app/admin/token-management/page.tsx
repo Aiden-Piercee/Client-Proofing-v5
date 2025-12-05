@@ -169,6 +169,39 @@ export default function TokenManagementPage() {
     setGenerateForm((prev) => ({ ...prev, [key]: value } as GenerateFormState));
   };
 
+  const toggleGenerateAlbum = (albumId: string) => {
+    setGenerateForm((prev) => {
+      const next = new Set(prev.album_ids);
+      if (next.has(albumId)) {
+        next.delete(albumId);
+      } else {
+        next.add(albumId);
+      }
+
+      return { ...prev, album_ids: Array.from(next) } as GenerateFormState;
+    });
+  };
+
+  const toggleSessionAlbum = (sessionId: number, albumId: string) => {
+    setSessionEdits((prev) => {
+      const current = new Set(prev[sessionId]?.album_ids ?? []);
+
+      if (current.has(albumId)) {
+        current.delete(albumId);
+      } else {
+        current.add(albumId);
+      }
+
+      return {
+        ...prev,
+        [sessionId]: {
+          ...prev[sessionId],
+          album_ids: Array.from(current),
+        },
+      };
+    });
+  };
+
   const handleClientSelect = (clientId: string) => {
     updateGenerateForm("client_id", clientId);
 
@@ -438,24 +471,46 @@ export default function TokenManagementPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
           <div className="flex flex-col gap-1 text-sm text-neutral-300">
             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Albums</span>
-            <select
-              multiple
-              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white"
-              value={generateForm.album_ids}
-              onChange={(e) =>
-                updateGenerateForm(
-                  "album_ids",
-                  Array.from(e.target.selectedOptions).map((opt) => opt.value)
-                )
-              }
-            >
-              {(resources?.albums ?? []).map((album) => (
-                <option key={album.id} value={album.id}>
-                  {(album as Album).title ?? "Untitled"} (#{album.id})
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-neutral-400">Hold Ctrl/⌘ to pick multiple galleries.</span>
+            <div className="bg-black/40 border border-white/10 rounded-lg p-2 max-h-72 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {(resources?.albums ?? []).map((album) => {
+                const albumId = String(album.id);
+                const selected = generateForm.album_ids.includes(albumId);
+                const cover = (album as Album).cover_url ?? (album as Album).featured_image ?? null;
+
+                return (
+                  <button
+                    key={album.id}
+                    type="button"
+                    onClick={() => toggleGenerateAlbum(albumId)}
+                    className={`flex gap-2 rounded-lg border px-2 py-2 text-left transition ${
+                      selected
+                        ? "border-cyan-400/60 bg-cyan-500/10"
+                        : "border-white/10 bg-black/30 hover:border-white/30"
+                    }`}
+                  >
+                    {cover ? (
+                      <img
+                        src={absoluteUrl(cover)}
+                        alt={(album as Album).title ?? `Album #${album.id}`}
+                        className="h-12 w-12 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 rounded bg-white/5 flex items-center justify-center text-[10px] text-neutral-400 border border-white/10">
+                        #{album.id}
+                      </div>
+                    )}
+                    <div className="flex flex-col justify-center">
+                      <p className="text-white text-sm font-medium leading-tight">
+                        {(album as Album).title ?? `Album #${album.id}`}
+                      </p>
+                      <p className="text-[10px] text-neutral-400 leading-tight">ID #{album.id}</p>
+                      {selected && <span className="text-[10px] text-cyan-300">Selected</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-xs text-neutral-400">Click to select or deselect one or more galleries.</span>
           </div>
           <div className="flex flex-col gap-1 text-sm text-neutral-300">
             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Existing client (optional)</span>
@@ -600,9 +655,11 @@ export default function TokenManagementPage() {
                             <p className="font-mono text-sm text-white break-all">{session.token}</p>
                             <div className="flex flex-wrap gap-2 pt-1">
                               {albumSummaries.map((album) => {
-                                const cover = (album.album as Album | null)?.cover_url ??
-                                  (album.album as Album | null)?.featured_image ??
-                                  null;
+                                const cover = absoluteUrl(
+                                  (album.album as Album | null)?.cover_url ??
+                                    (album.album as Album | null)?.featured_image ??
+                                    null,
+                                );
 
                                 return (
                                   <div
@@ -651,27 +708,48 @@ export default function TokenManagementPage() {
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                           <div className="flex flex-col gap-1 text-sm text-neutral-300">
                             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Albums</span>
-                            <select
-                              multiple
-                              className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white min-h-[120px]"
-                              value={sessionEdit?.album_ids ?? []}
-                              onChange={(e) =>
-                                setSessionEdits((prev) => ({
-                                  ...prev,
-                                  [session.id]: {
-                                    ...prev[session.id],
-                                    album_ids: Array.from(e.target.selectedOptions).map((opt) => opt.value),
-                                  },
-                                }))
-                              }
-                            >
-                              {(resources?.albums ?? []).map((album) => (
-                                <option key={album.id} value={album.id}>
-                                  {(album as Album).title ?? "Untitled"} (#{album.id})
-                                </option>
-                              ))}
-                            </select>
-                            <span className="text-xs text-neutral-400">Hold Ctrl/⌘ to select multiple galleries.</span>
+                            <div className="bg-black/40 border border-white/10 rounded-lg p-2 max-h-72 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {(resources?.albums ?? []).map((album) => {
+                                const albumId = String(album.id);
+                                const selected = sessionEdit?.album_ids.includes(albumId) ?? false;
+                                const cover = absoluteUrl(
+                                  (album as Album).cover_url ?? (album as Album).featured_image ?? null,
+                                );
+
+                                return (
+                                  <button
+                                    key={album.id}
+                                    type="button"
+                                    onClick={() => toggleSessionAlbum(session.id, albumId)}
+                                    className={`flex gap-2 rounded-lg border px-2 py-2 text-left transition ${
+                                      selected
+                                        ? "border-cyan-400/60 bg-cyan-500/10"
+                                        : "border-white/10 bg-black/30 hover:border-white/30"
+                                    }`}
+                                  >
+                                    {cover ? (
+                                      <img
+                                        src={cover}
+                                        alt={(album as Album).title ?? `Album #${album.id}`}
+                                        className="h-12 w-12 rounded object-cover"
+                                      />
+                                    ) : (
+                                      <div className="h-12 w-12 rounded bg-white/5 flex items-center justify-center text-[10px] text-neutral-400 border border-white/10">
+                                        #{album.id}
+                                      </div>
+                                    )}
+                                    <div className="flex flex-col justify-center">
+                                      <p className="text-white text-sm font-medium leading-tight">
+                                        {(album as Album).title ?? `Album #${album.id}`}
+                                      </p>
+                                      <p className="text-[10px] text-neutral-400 leading-tight">ID #{album.id}</p>
+                                      {selected && <span className="text-[10px] text-cyan-300">Selected</span>}
+                                    </div>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <span className="text-xs text-neutral-400">Click to select or deselect one or more galleries.</span>
                           </div>
                           <div className="flex flex-col gap-1 text-sm text-neutral-300">
                             <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">Linked client</span>
