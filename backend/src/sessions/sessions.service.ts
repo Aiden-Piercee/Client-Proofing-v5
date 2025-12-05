@@ -160,9 +160,11 @@ export class SessionsService {
       throw new BadRequestException('Token is required');
     }
 
+    await this.ensureSessionAlbumLinkTable();
+
     const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
       `
-      SELECT client_id, client_name
+      SELECT id, album_id, client_id, client_name
       FROM client_sessions
       WHERE token = ?
       LIMIT 1
@@ -175,6 +177,8 @@ export class SessionsService {
     }
 
     const session = sessionRows[0] as RowDataPacket & {
+      id: number;
+      album_id: number;
       client_id: number | null;
       client_name: string | null;
     };
@@ -183,17 +187,7 @@ export class SessionsService {
       throw new BadRequestException('Session is not linked to a client.');
     }
 
-    const [existingRows] = await this.proofDb.query<RowDataPacket[]>(
-      `
-      SELECT id
-      FROM client_sessions
-      WHERE token = ? AND album_id = ?
-      LIMIT 1
-      `,
-      [token, albumId]
-    );
-
-    if (existingRows.length > 0) {
+    if (Number(session.album_id) === Number(albumId)) {
       return {
         token,
         album_id: albumId,
@@ -201,13 +195,25 @@ export class SessionsService {
       };
     }
 
-    await this.proofDb.query(
+    const [existingRows] = await this.proofDb.query<RowDataPacket[]>(
       `
-      INSERT INTO client_sessions (album_id, client_id, token, client_name, expires_at)
-      VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
+      SELECT id
+      FROM client_session_albums
+      WHERE session_id = ? AND album_id = ?
+      LIMIT 1
       `,
-      [albumId, session.client_id, token, session.client_name ?? null]
+      [session.id, albumId]
     );
+
+    if (existingRows.length === 0) {
+      await this.proofDb.query(
+        `
+        INSERT INTO client_session_albums (session_id, album_id)
+        VALUES (?, ?)
+        `,
+        [session.id, albumId]
+      );
+    }
 
     return {
       token,
@@ -254,8 +260,59 @@ export class SessionsService {
       }
     >;
 
+    const sessionIdList = typedSessions.map((s) => Number(s.id));
+    const sessionAlbumMap = new Map<number, Set<number>>();
+
+    typedSessions.forEach((s) => {
+      sessionAlbumMap.set(Number(s.id), new Set([Number(s.album_id)]));
+    });
+
+    if (sessionIdList.length > 0) {
+      await this.ensureSessionAlbumLinkTable();
+
+      const placeholders = sessionIdList.map(() => '?').join(',');
+      const [linkedAlbums] = await this.proofDb.query<RowDataPacket[]>(
+        `
+        SELECT session_id, album_id
+        FROM client_session_albums
+        WHERE session_id IN (${placeholders})
+        `,
+        sessionIdList
+      );
+
+      (linkedAlbums as Array<
+        RowDataPacket & { session_id: number; album_id: number }
+      >).forEach((link) => {
+        const entry = sessionAlbumMap.get(Number(link.session_id));
+        if (entry) {
+          entry.add(Number(link.album_id));
+        }
+      });
+    }
+
+    const sessionAlbumPairs: Array<{
+      session_id: number;
+      album_id: number;
+      token: string;
+      created_at: Date;
+    }> = [];
+
+    sessionAlbumMap.forEach((albums, sessionId) => {
+      const baseSession = typedSessions.find((s) => Number(s.id) === sessionId);
+      if (!baseSession) return;
+
+      albums.forEach((albumId) => {
+        sessionAlbumPairs.push({
+          session_id: sessionId,
+          album_id: albumId,
+          token: baseSession.token,
+          created_at: baseSession.created_at,
+        });
+      });
+    });
+
     const albumIds = Array.from(
-      new Set(typedSessions.map((s) => Number(s.album_id)))
+      new Set(sessionAlbumPairs.map((s) => Number(s.album_id)))
     );
     const albumMap = new Map<number, any>();
 
@@ -274,8 +331,8 @@ export class SessionsService {
         name: session.client_name,
         email: session.email ?? null,
       },
-      sessions: typedSessions.map((s) => ({
-        session_id: Number(s.id),
+      sessions: sessionAlbumPairs.map((s) => ({
+        session_id: Number(s.session_id),
         album_id: Number(s.album_id),
         token: s.token,
         album: albumMap.get(Number(s.album_id)) ?? null,
@@ -302,16 +359,61 @@ export class SessionsService {
              cs.expires_at, c.email
       FROM client_sessions cs
       LEFT JOIN clients c ON c.id = cs.client_id
-      WHERE token = ?
-        ${typeof albumId === 'number' ? 'AND album_id = ?' : ''}
-        AND (expires_at IS NULL OR expires_at > NOW())
+      WHERE cs.token = ?
+        AND (cs.expires_at IS NULL OR cs.expires_at > NOW())
       LIMIT 1
       `,
       typeof albumId === 'number' ? [token, albumId] : [token]
     );
 
     if (rows.length === 0) throw new NotFoundException('Invalid session token');
-    return rows[0] as ClientSession;
+
+    const session = rows[0] as ClientSession & {
+      id: number;
+      album_id: number;
+      client_id: number | null;
+    };
+
+    if (typeof albumId === 'number') {
+      if (Number(session.album_id) !== Number(albumId)) {
+        await this.ensureSessionAlbumLinkTable();
+
+        const [linkRows] = await this.proofDb.query<RowDataPacket[]>(
+          `
+          SELECT id
+          FROM client_session_albums
+          WHERE session_id = ? AND album_id = ?
+          LIMIT 1
+          `,
+          [session.id, albumId]
+        );
+
+        if (linkRows.length === 0) {
+          throw new NotFoundException('Invalid session token');
+        }
+      }
+
+      return { ...session, album_id: Number(albumId) } as ClientSession;
+    }
+
+    return session as ClientSession;
+  }
+
+  private async ensureSessionAlbumLinkTable() {
+    await this.proofDb.query(
+      `
+      CREATE TABLE IF NOT EXISTS client_session_albums (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        session_id INT NOT NULL,
+        album_id INT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY client_session_album_unique (session_id, album_id),
+        INDEX idx_client_session_albums_album (album_id),
+        CONSTRAINT fk_client_session_albums_session FOREIGN KEY (session_id)
+          REFERENCES client_sessions(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      `
+    );
   }
 
   private async ensureClient(
