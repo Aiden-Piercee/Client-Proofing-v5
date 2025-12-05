@@ -141,11 +141,43 @@ export class AdminService {
       }
     >;
 
-    const albumIds = Array.from(new Set(typedRows.map((r) => Number(r.album_id))));
+    const sessionIdList = typedRows.map((row) => Number(row.id));
+    const sessionAlbumMap = new Map<number, Set<number>>();
+
+    typedRows.forEach((row) => {
+      sessionAlbumMap.set(Number(row.id), new Set([Number(row.album_id)]));
+    });
+
+    if (sessionIdList.length > 0) {
+      const placeholders = sessionIdList.map(() => '?').join(',');
+      const [linkedAlbums] = await this.proofDb.query<RowDataPacket[]>(
+        `
+        SELECT session_id, album_id
+        FROM client_session_albums
+        WHERE session_id IN (${placeholders})
+        `,
+        sessionIdList
+      );
+
+      (linkedAlbums as Array<RowDataPacket & { session_id: number; album_id: number }>).forEach(
+        (link) => {
+          const entry = sessionAlbumMap.get(Number(link.session_id));
+          if (entry) {
+            entry.add(Number(link.album_id));
+          }
+        }
+      );
+    }
+
+    const albumIds = new Set<number>();
+    sessionAlbumMap.forEach((albums) => {
+      albums.forEach((albumId) => albumIds.add(albumId));
+    });
+
     const albumMap = new Map<number, any>();
 
     await Promise.all(
-      albumIds.map(async (albumId) => {
+      Array.from(albumIds).map(async (albumId) => {
         try {
           const album = await this.albumsService.getAlbum(albumId);
           albumMap.set(albumId, album);
@@ -156,68 +188,38 @@ export class AdminService {
       })
     );
 
-    const clientSessionMap = new Map<
-      number,
-      Array<{ id: number; album_id: number; token: string; created_at: Date }>
-    >();
-
-    for (const row of typedRows) {
-      if (!row.client_id || clientSessionMap.has(row.client_id)) continue;
-
-      const [clientSessions] = await this.proofDb.query<RowDataPacket[]>(
-        `
-        SELECT id, album_id, token, created_at
-        FROM client_sessions
-        WHERE client_id = ?
-        ORDER BY created_at DESC
-        `,
-        [row.client_id]
-      );
-
-      const typedSessions = clientSessions as Array<
-        RowDataPacket & {
-          id: number;
-          album_id: number;
-          token: string;
-          created_at: Date;
-        }
-      >;
-
-      clientSessionMap.set(
-        row.client_id,
-        typedSessions.map((s) => ({
-          id: Number(s.id),
-          album_id: Number(s.album_id),
-          token: s.token,
-          created_at: s.created_at,
-        }))
-      );
-    }
-
     const baseUrl = this.getBaseUrl();
 
-    return typedRows.map((row) => {
-      const relatedSessions = row.client_id
-        ? clientSessionMap.get(row.client_id) ?? []
-        : [];
+    const sessionAlbumDetails = new Map<
+      number,
+      Array<{ session_id: number; album_id: number; token: string; album: any; magic_url: string }>
+    >();
 
-      return {
-        id: Number(row.id),
+    typedRows.forEach((row) => {
+      const albumSet = sessionAlbumMap.get(Number(row.id)) ?? new Set<number>();
+      const entries = Array.from(albumSet).map((albumId) => ({
+        session_id: Number(row.id),
+        album_id: albumId,
         token: row.token,
-        album_id: Number(row.album_id),
-        client_id: row.client_id ? Number(row.client_id) : null,
-        client_name: row.client_name,
-        email: row.email ?? null,
-        created_at: row.created_at,
-        album: albumMap.get(Number(row.album_id)) ?? null,
-        landing_magic_url: `${baseUrl}/proofing/landing/${row.token}`,
-        client_albums: relatedSessions.map((session) => ({
-          ...session,
-          album: albumMap.get(session.album_id) ?? null,
-          magic_url: `${baseUrl}/proofing/${session.album_id}/client/${session.token}`,
-        })),
-      };
+        album: albumMap.get(albumId) ?? null,
+        magic_url: `${baseUrl}/proofing/${albumId}/client/${row.token}`,
+      }));
+
+      sessionAlbumDetails.set(Number(row.id), entries);
     });
+
+    return typedRows.map((row) => ({
+      id: Number(row.id),
+      token: row.token,
+      album_id: Number(row.album_id),
+      client_id: row.client_id ? Number(row.client_id) : null,
+      client_name: row.client_name,
+      email: row.email ?? null,
+      created_at: row.created_at,
+      album: albumMap.get(Number(row.album_id)) ?? null,
+      landing_magic_url: `${baseUrl}/proofing/landing/${row.token}`,
+      client_albums: sessionAlbumDetails.get(Number(row.id)) ?? [],
+    }));
   }
 
   async generateManagedToken(options: {
@@ -671,25 +673,42 @@ export class AdminService {
 
     const albumSummaries = sessions.reduce(
       (acc, session) => {
-        const existing = acc.get(session.album_id) ?? {
-          album_id: session.album_id,
-          album: albumMap.get(session.album_id) ?? null,
-          tokens: [] as Array<{
-            token: string;
-            client_name: string | null;
-            client_id: number | null;
-            created_at: Date | string;
-          }>,
-        };
+        const albumEntries =
+          (session.client_albums && session.client_albums.length > 0)
+            ? session.client_albums
+            : [
+                {
+                  album_id: session.album_id,
+                  token: session.token,
+                  client_name: session.client_name,
+                  client_id: session.client_id,
+                  created_at: session.created_at,
+                  album: session.album,
+                },
+              ];
 
-        existing.tokens.push({
-          token: session.token,
-          client_name: session.client_name,
-          client_id: session.client_id,
-          created_at: session.created_at,
+        albumEntries.forEach((entry) => {
+          const existing = acc.get(entry.album_id) ?? {
+            album_id: entry.album_id,
+            album: albumMap.get(entry.album_id) ?? entry.album ?? null,
+            tokens: [] as Array<{
+              token: string;
+              client_name: string | null;
+              client_id: number | null;
+              created_at: Date | string;
+            }>,
+          };
+
+          existing.tokens.push({
+            token: session.token,
+            client_name: session.client_name,
+            client_id: session.client_id,
+            created_at: session.created_at,
+          });
+
+          acc.set(entry.album_id, existing);
         });
 
-        acc.set(session.album_id, existing);
         return acc;
       },
       new Map<
