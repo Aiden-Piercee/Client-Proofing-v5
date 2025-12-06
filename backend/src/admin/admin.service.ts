@@ -247,6 +247,150 @@ export class AdminService {
     }));
   }
 
+  async listClientsWithAlbums() {
+    const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email
+      FROM clients
+      ORDER BY created_at DESC
+      `,
+    );
+
+    const clients = (clientRows as Array<RowDataPacket & { id: number; name: string | null; email: string | null }>).map(
+      (row) => ({
+        id: Number(row.id),
+        name: row.name,
+        email: row.email,
+      })
+    );
+
+    if (clients.length === 0) {
+      return [] as Array<{
+        id: number;
+        name: string | null;
+        email: string | null;
+        albums: Array<{ album_id: number; album: any; original_count: number; edited_count: number }>;
+        tokens: string[];
+        original_total: number;
+        edited_total: number;
+      }>;
+    }
+
+    const clientIds = clients.map((client) => client.id);
+    const clientPlaceholders = clientIds.map(() => '?').join(',');
+
+    const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, album_id, client_id, token
+      FROM client_sessions
+      WHERE client_id IN (${clientPlaceholders})
+      `,
+      clientIds,
+    );
+
+    const sessionAlbums = new Map<number, { albumIds: Set<number>; tokens: Set<string> }>();
+
+    const typedSessions = sessionRows as Array<
+      RowDataPacket & { id: number; album_id: number; client_id: number | null; token: string }
+    >;
+
+    typedSessions.forEach((row) => {
+      if (!row.client_id) {
+        return;
+      }
+
+      const clientId = Number(row.client_id);
+      const entry = sessionAlbums.get(clientId) ?? { albumIds: new Set<number>(), tokens: new Set<string>() };
+      entry.albumIds.add(Number(row.album_id));
+      entry.tokens.add(row.token);
+      sessionAlbums.set(clientId, entry);
+    });
+
+    const sessionIds = typedSessions.map((row) => Number(row.id));
+
+    if (sessionIds.length > 0) {
+      const sessionPlaceholders = sessionIds.map(() => '?').join(',');
+      const [linkedAlbums] = await this.proofDb.query<RowDataPacket[]>(
+        `
+        SELECT session_id, album_id
+        FROM client_session_albums
+        WHERE session_id IN (${sessionPlaceholders})
+        `,
+        sessionIds,
+      );
+
+      (linkedAlbums as Array<RowDataPacket & { session_id: number; album_id: number }>).forEach((link) => {
+        const session = typedSessions.find((row) => Number(row.id) === Number(link.session_id));
+
+        if (!session || !session.client_id) {
+          return;
+        }
+
+        const clientId = Number(session.client_id);
+        const entry = sessionAlbums.get(clientId) ?? { albumIds: new Set<number>(), tokens: new Set<string>() };
+        entry.albumIds.add(Number(link.album_id));
+        entry.tokens.add(session.token);
+        sessionAlbums.set(clientId, entry);
+      });
+    }
+
+    const albumIds = new Set<number>();
+    sessionAlbums.forEach((value) => {
+      value.albumIds.forEach((albumId) => albumIds.add(albumId));
+    });
+
+    const albumDetails = new Map<number, { album: any; originalCount: number; editedCount: number }>();
+
+    await Promise.all(
+      Array.from(albumIds).map(async (albumId) => {
+        try {
+          const album = await this.albumsService.getAlbum(albumId);
+          const images = await this.albumsService.listImagesForAlbum(albumId);
+
+          let originalCount = 0;
+          let editedCount = 0;
+
+          images.forEach((img) => {
+            const filename = `${img.filename ?? ''}`;
+            if (filename.toLowerCase().includes('-edit')) {
+              editedCount += 1;
+            } else {
+              originalCount += 1;
+            }
+          });
+
+          albumDetails.set(albumId, { album, originalCount, editedCount });
+        } catch (error) {
+          albumDetails.set(albumId, { album: null, originalCount: 0, editedCount: 0 });
+        }
+      })
+    );
+
+    return clients.map((client) => {
+      const mapping = sessionAlbums.get(client.id) ?? { albumIds: new Set<number>(), tokens: new Set<string>() };
+      const albums = Array.from(mapping.albumIds).map((albumId) => {
+        const details = albumDetails.get(albumId) ?? { album: null, originalCount: 0, editedCount: 0 };
+        return {
+          album_id: albumId,
+          album: details.album,
+          original_count: details.originalCount,
+          edited_count: details.editedCount,
+        };
+      });
+
+      const originalTotal = albums.reduce((acc, item) => acc + item.original_count, 0);
+      const editedTotal = albums.reduce((acc, item) => acc + item.edited_count, 0);
+
+      return {
+        ...client,
+        albums,
+        tokens: Array.from(mapping.tokens),
+        original_total: originalTotal,
+        edited_total: editedTotal,
+      };
+    });
+  }
+
   async generateManagedToken(options: {
     albumIds: number[];
     clientId?: number;

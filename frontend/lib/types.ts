@@ -112,3 +112,20 @@ export interface AdminTokenResources {
     }>;
   }>;
 }
+
+export interface AdminClientAlbumSummary {
+  album_id: number;
+  album: Album | null;
+  original_count: number;
+  edited_count: number;
+}
+
+export interface AdminClientSummary {
+  id: number;
+  name: string | null;
+  email: string | null;
+  albums: AdminClientAlbumSummary[];
+  tokens: string[];
+  original_total: number;
+  edited_total: number;
+}
