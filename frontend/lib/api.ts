@@ -24,6 +24,14 @@ export function validateSession(token: string): Promise<SessionInfo> {
   return apiGet(`/client/session/${token}`);
 }
 
+export function attachEmailToSession(
+  token: string,
+  email: string,
+  clientName?: string,
+): Promise<SessionInfo> {
+  return apiPost(`/client/session/${token}/email`, { email, clientName });
+}
+
 // ---- Album list ----
 export function getAlbums(): Promise<Album[]> {
   return apiGet("/albums");

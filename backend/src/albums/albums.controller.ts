@@ -41,10 +41,6 @@ export class AlbumsController {
         sessionToken,
         id,
       );
-
-      if (!session.client_id) {
-        throw new BadRequestException('Session is not linked to a client.');
-      }
     }
 
     return this.albumsService.getAlbum(id);

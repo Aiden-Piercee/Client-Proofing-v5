@@ -53,8 +53,8 @@ export interface Image {
 export interface SessionInfo {
   id: number;
   album_id: number;
-  client_id: number;
-  client_name: string;
+  client_id: number | null;
+  client_name: string | null;
   email?: string | null;
   expires_at: string | Date;
 }

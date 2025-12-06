@@ -10,8 +10,10 @@ interface Props {
   albumId: number;
   sessionToken: string;
   sessionEmail?: string | null;
+  persistSelections: boolean;
   selectedImages: string[];
   onSelectionChange: (imgs: string[]) => void;
+  onPersistenceBlocked?: () => void;
 }
 
 type FilterType = "all" | "favorite" | "approved" | "rejected";
@@ -20,7 +22,9 @@ export default function GalleryGrid({
   albumId,
   sessionToken,
   sessionEmail,
+  persistSelections,
   onSelectionChange,
+  onPersistenceBlocked,
 }: Props) {
   const [images, setImages] = useState<Image[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +79,10 @@ export default function GalleryGrid({
     );
     setImages(updated);
     updateSelection(updated);
+    if (!persistSelections) {
+      onPersistenceBlocked?.();
+      return;
+    }
     await sendSelection({ sessionToken, imageId: id, state });
   };
 
@@ -84,6 +92,10 @@ export default function GalleryGrid({
     );
     setImages(updated);
     updateSelection(updated);
+    if (!persistSelections) {
+      onPersistenceBlocked?.();
+      return;
+    }
     await sendSelection({ sessionToken, imageId: id, state: null, print: false });
   };
 
@@ -94,6 +106,10 @@ export default function GalleryGrid({
       img.id === id ? { ...img, print: !img.print } : img
     );
     setImages(updated);
+    if (!persistSelections) {
+      onPersistenceBlocked?.();
+      return;
+    }
     await sendSelection({ sessionToken, imageId: id, print: !original.print });
   };
 

@@ -32,4 +32,16 @@ export class SessionsController {
   async validate(@Param('token') token: string) {
     return this.service.validateSession(token);
   }
+
+  @Post('session/:token/email')
+  async attachEmail(
+    @Param('token') token: string,
+    @Body() body: { email: string; clientName?: string },
+  ) {
+    return this.service.attachEmailToSession(
+      token,
+      body.email,
+      body.clientName,
+    );
+  }
 }
