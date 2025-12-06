@@ -4,7 +4,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
-  NotFoundException
+  NotFoundException,
 } from '@nestjs/common';
 import { Pool } from 'mysql2/promise';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
@@ -109,6 +109,39 @@ export class SessionsService {
     });
 
     return { token, link };
+  }
+
+  async attachEmailToSession(
+    token: string,
+    email: string,
+    clientName?: string,
+  ) {
+    const normalizedEmail = email?.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new BadRequestException('Email is required to link the session.');
+    }
+
+    const existingSession = await this.getValidSession(token);
+
+    if (existingSession.client_id) {
+      return existingSession;
+    }
+
+    const client = await this.ensureClient(normalizedEmail, clientName);
+
+    await this.proofDb.query(
+      `
+      UPDATE client_sessions
+      SET client_id = ?,
+          client_name = ?,
+          expires_at = COALESCE(expires_at, DATE_ADD(NOW(), INTERVAL 30 DAY))
+      WHERE token = ?
+      `,
+      [client.id, clientName ?? client.name ?? normalizedEmail, token],
+    );
+
+    return this.getValidSession(token);
   }
 
   async createSessionForClientId(
