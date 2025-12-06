@@ -102,7 +102,8 @@ export default function AdminAlbumDetailPage() {
     const filenames = (album.images ?? [])
       .filter((img) => img.selections?.some((sel) => !!sel.state || sel.print))
       .map((img) => img.filename)
-      .filter((name): name is string => !!name && name.trim().length > 0);
+      .filter((name): name is string => !!name && name.trim().length > 0)
+      .map((name) => name.replace(/\.jpe?g$/i, ""));
 
     if (filenames.length === 0) {
       setMarkedFilenames("");
