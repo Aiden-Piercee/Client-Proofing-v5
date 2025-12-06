@@ -42,21 +42,23 @@ export class SessionsService {
    *  Admin-only: Create session WITHOUT requiring client email
    *  Used when admin generates magic link before client email exists
    *  ───────────────────────────────────────────────────────────── */
-  async createAnonymousSession(albumId: number) {
+  async createAnonymousSession(albumId: number, clientName?: string | null) {
     const token = crypto.randomBytes(16).toString('hex');
     const baseUrl = this.getBaseUrl();
+    const normalizedName = clientName?.trim() || null;
 
     await this.proofDb.query(
       `
       INSERT INTO client_sessions (album_id, token, client_id, client_name, expires_at)
-      VALUES (?, ?, NULL, NULL, DATE_ADD(NOW(), INTERVAL 30 DAY))
+      VALUES (?, ?, NULL, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
       `,
-      [albumId, token]
+      [albumId, token, normalizedName]
     );
 
     return {
       album_id: albumId,
       token,
+      client_name: normalizedName,
       magic_url: `${baseUrl}/proofing/${albumId}/client/${token}`
     };
   }

@@ -493,7 +493,10 @@ export class AdminService {
         clientId = createdSession?.client_id ?? clientId;
       }
     } else {
-      const created = await this.sessionsService.createAnonymousSession(primaryAlbumId);
+      const created = await this.sessionsService.createAnonymousSession(
+        primaryAlbumId,
+        options.clientName ?? null,
+      );
       tokenValue = created.token;
     }
 
@@ -573,6 +576,72 @@ export class AdminService {
     return { removed: true };
   }
 
+  async removeClient(clientId: number) {
+    const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id
+      FROM clients
+      WHERE id = ?
+      LIMIT 1
+      `,
+      [clientId],
+    );
+
+    if (clientRows.length === 0) {
+      throw new NotFoundException('Client not found');
+    }
+
+    const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id
+      FROM client_sessions
+      WHERE client_id = ?
+      `,
+      [clientId],
+    );
+
+    const sessionIds = (sessionRows as Array<RowDataPacket & { id: number }>).map((row) =>
+      Number(row.id),
+    );
+
+    if (sessionIds.length > 0) {
+      const placeholders = sessionIds.map(() => '?').join(',');
+      await this.proofDb.query(
+        `
+        DELETE FROM client_session_albums
+        WHERE session_id IN (${placeholders})
+        `,
+        sessionIds,
+      );
+
+      await this.proofDb.query(
+        `
+        DELETE FROM client_sessions
+        WHERE id IN (${placeholders})
+        `,
+        sessionIds,
+      );
+    }
+
+    await this.proofDb.query(
+      `
+      DELETE FROM client_selections
+      WHERE client_id = ?
+      `,
+      [clientId],
+    );
+
+    await this.proofDb.query(
+      `
+      DELETE FROM clients
+      WHERE id = ?
+      `,
+      [clientId],
+    );
+
+    return { removed: true, client_id: clientId };
+  }
+
   async updateSessionDetails(
     sessionId: number,
     payload: {
@@ -580,6 +649,7 @@ export class AdminService {
       clientId?: number | null;
       clientName?: string | null;
       clientEmail?: string | null;
+      token?: string | null;
     }
   ) {
     const [sessionRows] = await this.proofDb.query<RowDataPacket[]>(
@@ -615,6 +685,28 @@ export class AdminService {
 
       if (clientRows.length === 0) {
         throw new NotFoundException('Client not found');
+      }
+    }
+
+    if (payload.token !== undefined) {
+      const trimmedToken = payload.token?.trim();
+
+      if (!trimmedToken) {
+        throw new BadRequestException('Token cannot be empty');
+      }
+
+      const [tokenRows] = await this.proofDb.query<RowDataPacket[]>(
+        `
+        SELECT id
+        FROM client_sessions
+        WHERE token = ? AND id <> ?
+        LIMIT 1
+        `,
+        [trimmedToken, sessionId],
+      );
+
+      if (tokenRows.length > 0) {
+        throw new BadRequestException('Token is already in use');
       }
     }
 
@@ -703,6 +795,11 @@ export class AdminService {
           clientValues,
         );
       }
+    }
+
+    if (payload.token !== undefined) {
+      updates.push('token = ?');
+      values.push(payload.token?.trim() ?? null);
     }
 
     if (updates.length > 0) {
@@ -900,5 +997,28 @@ export class AdminService {
       albums,
       albumSummaries: Array.from(albumSummaries.values()),
     };
+  }
+
+  async listHousekeeping() {
+    const [clientRows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT id, name, email, created_at
+      FROM clients
+      ORDER BY created_at DESC
+      `,
+    );
+
+    const clients = (clientRows as Array<
+      RowDataPacket & { id: number; name: string | null; email: string | null; created_at: Date }
+    >).map((row) => ({
+      id: Number(row.id),
+      name: row.name,
+      email: row.email,
+      created_at: row.created_at,
+    }));
+
+    const sessions = await this.listSessions();
+
+    return { clients, sessions };
   }
 }
