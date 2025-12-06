@@ -47,18 +47,29 @@ export class SessionsService {
     const baseUrl = this.getBaseUrl();
     const normalizedName = clientName?.trim() || null;
 
+    const [insertedClient] = await this.proofDb.query<ResultSetHeader>(
+      `
+      INSERT INTO clients (name, email, created_at)
+      VALUES (?, NULL, NOW())
+      `,
+      [normalizedName]
+    );
+
+    const clientId = Number(insertedClient.insertId);
+
     await this.proofDb.query(
       `
       INSERT INTO client_sessions (album_id, token, client_id, client_name, expires_at)
-      VALUES (?, ?, NULL, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
+      VALUES (?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 30 DAY))
       `,
-      [albumId, token, normalizedName]
+      [albumId, token, clientId, normalizedName ?? 'Client']
     );
 
     return {
       album_id: albumId,
       token,
-      client_name: normalizedName,
+      client_id: clientId,
+      client_name: normalizedName ?? 'Client',
       magic_url: `${baseUrl}/proofing/${albumId}/client/${token}`
     };
   }
@@ -271,8 +282,14 @@ export class SessionsService {
 
   async getClientLanding(token: string) {
     const session = await this.getValidSession(token);
+    let resolvedSession = session;
 
     if (!session.client_id) {
+      const linked = await this.ensureClientForAnonymousSession(session);
+      resolvedSession = linked;
+    }
+
+    if (!resolvedSession.client_id) {
       throw new BadRequestException('Session is not linked to a client.');
     }
 
@@ -283,7 +300,7 @@ export class SessionsService {
       WHERE client_id = ?
       ORDER BY created_at DESC
       `,
-      [session.client_id]
+      [resolvedSession.client_id]
     );
 
     const typedSessions = clientSessionRows as Array<
@@ -362,9 +379,9 @@ export class SessionsService {
 
     return {
       client: {
-        id: session.client_id,
-        name: session.client_name,
-        email: session.email ?? null,
+        id: resolvedSession.client_id,
+        name: resolvedSession.client_name,
+        email: resolvedSession.email ?? null,
       },
       sessions: sessionAlbumPairs.map((s) => ({
         session_id: Number(s.session_id),
@@ -398,7 +415,7 @@ export class SessionsService {
         AND (cs.expires_at IS NULL OR cs.expires_at > NOW())
       LIMIT 1
       `,
-      typeof albumId === 'number' ? [token, albumId] : [token]
+      [token]
     );
 
     if (rows.length === 0) throw new NotFoundException('Invalid session token');
@@ -449,6 +466,52 @@ export class SessionsService {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
       `
     );
+  }
+
+  private async ensureClientForAnonymousSession(
+    session: ClientSession & { id: number }
+  ): Promise<ClientSession & { id: number }> {
+    if (session.client_id) {
+      return session;
+    }
+
+    const placeholderName = session.client_name?.trim() || 'Client';
+
+    const [insertedClient] = await this.proofDb.query<ResultSetHeader>(
+      `
+      INSERT INTO clients (name, email, created_at)
+      VALUES (?, NULL, NOW())
+      `,
+      [placeholderName]
+    );
+
+    const clientId = Number(insertedClient.insertId);
+
+    await this.proofDb.query(
+      `
+      UPDATE client_sessions
+      SET client_id = ?, client_name = COALESCE(client_name, ?)
+      WHERE id = ?
+      `,
+      [clientId, placeholderName, session.id]
+    );
+
+    const [rows] = await this.proofDb.query<RowDataPacket[]>(
+      `
+      SELECT cs.id, cs.album_id, cs.client_id, cs.token, cs.client_name, cs.expires_at, c.email
+      FROM client_sessions cs
+      LEFT JOIN clients c ON c.id = cs.client_id
+      WHERE cs.id = ?
+      LIMIT 1
+      `,
+      [session.id]
+    );
+
+    if (rows.length === 0) {
+      throw new NotFoundException('Session not found after client link');
+    }
+
+    return rows[0] as ClientSession & { id: number };
   }
 
   private async ensureClient(

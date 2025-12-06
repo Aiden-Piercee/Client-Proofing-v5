@@ -752,6 +752,23 @@ export class AdminService {
       }
     }
 
+    if (
+      (payload.clientName !== undefined && payload.clientName !== null) &&
+      (clientIdToLink === null || clientIdToLink === undefined) &&
+      payload.clientId !== null &&
+      !payload.clientEmail
+    ) {
+      const [insertedClient] = await this.proofDb.query<ResultSetHeader>(
+        `
+        INSERT INTO clients (name, email, created_at)
+        VALUES (?, NULL, NOW())
+        `,
+        [payload.clientName ?? null]
+      );
+
+      clientIdToLink = Number(insertedClient.insertId);
+    }
+
     const updates: string[] = [];
     const values: Array<number | string | null> = [];
 

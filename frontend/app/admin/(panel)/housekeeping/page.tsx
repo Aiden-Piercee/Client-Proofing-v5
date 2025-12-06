@@ -142,6 +142,13 @@ export default function HousekeepingPage() {
       if (!token) throw new Error("Missing admin token");
 
       const edits = sessionEdits[session.id];
+      const clientIdValue =
+        edits?.client_id !== undefined
+          ? edits.client_id
+          : session.client_id
+          ? String(session.client_id)
+          : "";
+
       const res = await fetch(`${API}/admin/housekeeping/session/${session.id}`, {
         method: "PATCH",
         headers: {
@@ -152,7 +159,7 @@ export default function HousekeepingPage() {
           token: edits?.token ?? session.token,
           client_name: edits?.client_name ?? session.client_name ?? null,
           client_email: edits?.client_email ?? session.email ?? null,
-          client_id: edits?.client_id ? Number(edits.client_id) : null,
+          client_id: clientIdValue ? Number(clientIdValue) : null,
         }),
       });
 
