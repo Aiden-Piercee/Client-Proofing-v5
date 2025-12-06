@@ -103,6 +103,12 @@ export class AdminController {
   }
 
   @UseGuards(AdminGuard)
+  @Get('clients')
+  async listClients() {
+    return this.adminService.listClientsWithAlbums();
+  }
+
+  @UseGuards(AdminGuard)
   @Post('token-management/generate')
   async generateManagedToken(@Body() body: GenerateTokenDto) {
     return this.adminService.generateManagedToken({
