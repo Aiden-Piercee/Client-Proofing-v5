@@ -167,14 +167,18 @@ export default function SessionsPage() {
                       key={`${s.id}-${album.album_id}`}
                       className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-xl p-3 min-w-[260px]"
                     >
-                      <div className="h-14 w-20 overflow-hidden rounded-lg bg-neutral-800">
+                      <a
+                        href={`/admin/albums/${album.album_id}`}
+                        className="h-14 w-20 overflow-hidden rounded-lg bg-neutral-800 ring-0 ring-cyan-400/50 transition hover:ring-2"
+                        aria-label={`Open album ${album.album_id} in admin`}
+                      >
                         <img
                           src={album.album?.cover_url || FALLBACK_COVER}
                           alt={album.album?.title || "Album"}
                           className="h-full w-full object-cover"
                           loading="lazy"
                         />
-                      </div>
+                      </a>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white font-semibold truncate">{album.album?.title || "Untitled album"}</p>
                         <p className="text-xs text-neutral-400">Album #{album.album_id}</p>
@@ -190,6 +194,12 @@ export default function SessionsPage() {
                             className="text-xs inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1 text-cyan-100 hover:bg-cyan-500/20 transition"
                           >
                             ▶️ Open
+                          </a>
+                          <a
+                            href={`/admin/albums/${album.album_id}`}
+                            className="text-xs inline-flex items-center gap-1 rounded-full bg-white/5 px-2 py-1 text-amber-100 hover:bg-amber-500/20 transition"
+                          >
+                            🗂️ Admin album
                           </a>
                         </div>
                       </div>

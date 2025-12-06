@@ -52,28 +52,46 @@ export class AdminService {
 
     const [selectionRows] = await this.proofDb.query<RowDataPacket[]>(
       `
-      SELECT DISTINCT cs.image_id, cs.state, cs.print, c.name AS client_name, c.email, c.id AS client_id
+      SELECT cs.image_id, cs.state, cs.print, cs.updated_at, c.name AS client_name, c.email, c.id AS client_id
       FROM client_selections cs
       INNER JOIN clients c ON c.id = cs.client_id
       INNER JOIN client_sessions sess ON sess.client_id = cs.client_id
       LEFT JOIN client_session_albums csa ON csa.session_id = sess.id
       WHERE sess.album_id = ? OR csa.album_id = ?
+      ORDER BY cs.updated_at DESC
       `,
       [id, id]
     );
 
     const selectionMap = new Map<number, Array<{ client_id: number; client_name: string | null; email: string | null; state: string | null; print: boolean }>>();
+    const seenClientsByImage = new Map<number, Set<number>>();
 
-    (selectionRows as Array<RowDataPacket & { image_id: number; state: string | null; print: number; client_name: string | null; email: string | null; client_id: number }>).forEach((row) => {
-      const entry = selectionMap.get(row.image_id) ?? [];
+    (
+      selectionRows as Array<RowDataPacket & { image_id: number; state: string | null; print: number; client_name: string | null; email: string | null; client_id: number | null }>
+    ).forEach((row) => {
+      if (row.client_id === null || row.client_id === undefined) {
+        return;
+      }
+
+      const imageId = Number(row.image_id);
+      const clientId = Number(row.client_id);
+
+      const seenClients = seenClientsByImage.get(imageId) ?? new Set<number>();
+      if (seenClients.has(clientId)) {
+        return;
+      }
+
+      const entry = selectionMap.get(imageId) ?? [];
       entry.push({
-        client_id: Number(row.client_id),
+        client_id: clientId,
         client_name: row.client_name,
         email: row.email,
         state: row.state,
         print: !!row.print,
       });
-      selectionMap.set(row.image_id, entry);
+      selectionMap.set(imageId, entry);
+      seenClients.add(clientId);
+      seenClientsByImage.set(imageId, seenClients);
     });
 
     const [sessions] = await this.proofDb.query<RowDataPacket[]>(
