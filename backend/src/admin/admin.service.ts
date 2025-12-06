@@ -56,9 +56,10 @@ export class AdminService {
       FROM client_selections cs
       INNER JOIN clients c ON c.id = cs.client_id
       INNER JOIN client_sessions sess ON sess.client_id = cs.client_id
-      WHERE sess.album_id = ?
+      LEFT JOIN client_session_albums csa ON csa.session_id = sess.id
+      WHERE sess.album_id = ? OR csa.album_id = ?
       `,
-      [id]
+      [id, id]
     );
 
     const selectionMap = new Map<number, Array<{ client_id: number; client_name: string | null; email: string | null; state: string | null; print: boolean }>>();
@@ -76,8 +77,14 @@ export class AdminService {
     });
 
     const [sessions] = await this.proofDb.query<RowDataPacket[]>(
-      'SELECT * FROM client_sessions WHERE album_id = ? ORDER BY created_at DESC',
-      [id]
+      `
+      SELECT DISTINCT cs.*
+      FROM client_sessions cs
+      LEFT JOIN client_session_albums csa ON csa.session_id = cs.id
+      WHERE cs.album_id = ? OR csa.album_id = ?
+      ORDER BY cs.created_at DESC
+      `,
+      [id, id]
     );
 
     const typedImages = images as Array<
