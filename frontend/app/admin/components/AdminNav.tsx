@@ -9,6 +9,7 @@ const navItems = [
   { href: "/admin/clients", label: "Client List" },
   { href: "/admin/sessions", label: "Sessions" },
   { href: "/admin/token-management", label: "Token management" },
+  { href: "/admin/housekeeping", label: "Housekeeping" },
 ];
 
 export default function AdminNav() {
