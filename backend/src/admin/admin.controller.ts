@@ -46,6 +46,7 @@ class UpdateSessionDto {
   client_id?: number | null;
   client_name?: string | null;
   client_email?: string | null;
+  token?: string | null;
 }
 
 class UpdateClientDto {
@@ -100,6 +101,12 @@ export class AdminController {
   @Get('token-management/resources')
   async listTokenResources() {
     return this.adminService.listTokenResources();
+  }
+
+  @UseGuards(AdminGuard)
+  @Get('housekeeping')
+  async listHousekeeping() {
+    return this.adminService.listHousekeeping();
   }
 
   @UseGuards(AdminGuard)
@@ -162,5 +169,44 @@ export class AdminController {
       name: body.name ?? null,
       email: body.email ?? null,
     });
+  }
+
+  @UseGuards(AdminGuard)
+  @Patch('housekeeping/session/:sessionId')
+  async updateSessionForHousekeeping(
+    @Param() params: SessionParam,
+    @Body() body: UpdateSessionDto,
+  ) {
+    return this.adminService.updateSessionDetails(Number(params.sessionId), {
+      albumId: body.album_id,
+      clientId: body.client_id,
+      clientName: body.client_name,
+      clientEmail: body.client_email,
+      token: body.token,
+    });
+  }
+
+  @UseGuards(AdminGuard)
+  @Delete('housekeeping/session/:sessionId')
+  async deleteSessionForHousekeeping(@Param() params: SessionParam) {
+    return this.adminService.removeSession(Number(params.sessionId));
+  }
+
+  @UseGuards(AdminGuard)
+  @Patch('housekeeping/client/:clientId')
+  async updateClientForHousekeeping(
+    @Param() params: ClientParam,
+    @Body() body: UpdateClientDto,
+  ) {
+    return this.adminService.updateClientDetails(Number(params.clientId), {
+      name: body.name ?? null,
+      email: body.email ?? null,
+    });
+  }
+
+  @UseGuards(AdminGuard)
+  @Delete('housekeeping/client/:clientId')
+  async deleteClientForHousekeeping(@Param() params: ClientParam) {
+    return this.adminService.removeClient(Number(params.clientId));
   }
 }

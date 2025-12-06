@@ -129,3 +129,15 @@ export interface AdminClientSummary {
   original_total: number;
   edited_total: number;
 }
+
+export interface HousekeepingClient {
+  id: number;
+  name: string | null;
+  email: string | null;
+  created_at: string | Date;
+}
+
+export interface HousekeepingPayload {
+  clients: HousekeepingClient[];
+  sessions: AdminSession[];
+}
