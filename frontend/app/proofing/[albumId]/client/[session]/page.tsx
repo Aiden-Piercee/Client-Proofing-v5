@@ -50,7 +50,7 @@ export default function SessionPage({ params }: Props) {
     setAlbum(alb);
     setImages(imgs);
 
-    const canPersist = Boolean(session?.client_id || session?.email);
+    const canPersist = Boolean(session?.email);
     setPersistSelections(canPersist);
     setShowEmailModal(!canPersist);
     setEmailInput(session?.email ?? "");
