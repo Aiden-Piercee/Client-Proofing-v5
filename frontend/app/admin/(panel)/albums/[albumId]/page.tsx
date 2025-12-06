@@ -212,7 +212,7 @@ export default function AdminAlbumDetailPage() {
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition" />
               <div className="absolute inset-x-3 bottom-3 space-y-1 text-xs">
                 {img.selections && img.selections.length > 0 ? (
-                  img.selections.map((sel, idx) => (
+                  latestSelections(img.selections).map((sel, idx) => (
                     <div
                       key={`${img.id}-${sel.client_id}-${sel.state}-${idx}`}
                       className="flex items-center gap-2 rounded-xl bg-black/60 px-3 py-2 backdrop-blur"
@@ -295,6 +295,27 @@ function badgeTone(state: SelectionState | null) {
   if (state === "approved") return "bg-emerald-500/30 border border-emerald-300/40";
   if (state === "rejected") return "bg-red-600/40 border border-red-300/40";
   return "bg-white/20 border border-white/30";
+}
+
+function latestSelections(selections: ImageSelectionSummary[]) {
+  const seen = new Set<string>();
+  const latest: ImageSelectionSummary[] = [];
+
+  selections.forEach((sel, index) => {
+    const key =
+      sel.client_id !== null && sel.client_id !== undefined
+        ? `client-${sel.client_id}`
+        : sel.email
+          ? `email-${sel.email.toLowerCase()}`
+          : `fallback-${index}`;
+
+    if (seen.has(key)) return;
+
+    seen.add(key);
+    latest.push(sel);
+  });
+
+  return latest;
 }
 
 function LegendPill({ tone, border, label }: { tone: string; border: string; label: string }) {
