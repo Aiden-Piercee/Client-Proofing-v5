@@ -219,7 +219,7 @@ export class EditScheduler {
     const previews = await this.buildAlbumPreviewAttachments(albumId);
 
     const [sessionRows] = await this.proofingDb.query<RowDataPacket[]>(
-      `SELECT cs.token, cs.client_name, cs.client_id, cs.email AS session_email, c.email AS client_email
+      `SELECT cs.token, cs.client_name, cs.client_id, c.email AS client_email
        FROM client_sessions cs
        LEFT JOIN clients c ON c.id = cs.client_id
        LEFT JOIN client_session_albums csa ON csa.session_id = cs.id
@@ -232,7 +232,6 @@ export class EditScheduler {
         token: string;
         client_name: string | null;
         client_id: number | null;
-        session_email: string | null;
         client_email: string | null;
       }
     >;
@@ -243,7 +242,7 @@ export class EditScheduler {
     >();
 
     typedRows.forEach((row) => {
-      const emailCandidate = `${row.client_email ?? row.session_email ?? ''}`.trim();
+      const emailCandidate = `${row.client_email ?? ''}`.trim();
       if (!emailCandidate) {
         return;
       }

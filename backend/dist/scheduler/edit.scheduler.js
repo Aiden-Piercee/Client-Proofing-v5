@@ -151,7 +151,7 @@ let EditScheduler = EditScheduler_1 = class EditScheduler {
         const album = await this.kokenService.getAlbumById(albumId);
         const baseUrl = this.getBaseUrl();
         const previews = await this.buildAlbumPreviewAttachments(albumId);
-        const [sessionRows] = await this.proofingDb.query(`SELECT cs.token, cs.client_name, cs.client_id, cs.email AS session_email, c.email AS client_email
+        const [sessionRows] = await this.proofingDb.query(`SELECT cs.token, cs.client_name, cs.client_id, c.email AS client_email
        FROM client_sessions cs
        LEFT JOIN clients c ON c.id = cs.client_id
        LEFT JOIN client_session_albums csa ON csa.session_id = cs.id
@@ -159,15 +159,15 @@ let EditScheduler = EditScheduler_1 = class EditScheduler {
         const typedRows = sessionRows;
         const recipients = new Map();
         typedRows.forEach((row) => {
-            var _a, _b, _c, _d;
-            const emailCandidate = `${(_b = (_a = row.client_email) !== null && _a !== void 0 ? _a : row.session_email) !== null && _b !== void 0 ? _b : ''}`.trim();
+            var _a, _b, _c;
+            const emailCandidate = `${(_a = row.client_email) !== null && _a !== void 0 ? _a : ''}`.trim();
             if (!emailCandidate) {
                 return;
             }
             const magicLink = `${baseUrl}/proofing/${albumId}/client/${row.token}`;
             const landingLink = `${baseUrl}/proofing/landing/${row.token}`;
-            const entry = (_c = recipients.get(emailCandidate)) !== null && _c !== void 0 ? _c : {
-                clientName: (_d = row.client_name) !== null && _d !== void 0 ? _d : null,
+            const entry = (_b = recipients.get(emailCandidate)) !== null && _b !== void 0 ? _b : {
+                clientName: (_c = row.client_name) !== null && _c !== void 0 ? _c : null,
                 sessionLinks: [],
                 landingLink,
             };

@@ -16,7 +16,7 @@ const config_1 = require("@nestjs/config");
 const nodemailer_1 = require("nodemailer");
 let EmailService = EmailService_1 = class EmailService {
     constructor(configService) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         this.logger = new common_1.Logger(EmailService_1.name);
         const mailer = (_a = nodemailer_1.default) !== null && _a !== void 0 ? _a : require('nodemailer');
         if (!mailer || !mailer.createTransport) {
@@ -26,13 +26,20 @@ let EmailService = EmailService_1 = class EmailService {
         const port = Number((_b = configService.get('SMTP_PORT')) !== null && _b !== void 0 ? _b : 587);
         const user = configService.get('SMTP_USER');
         const pass = configService.get('SMTP_PASS');
+        const allowSelfSigned = `${(_c = configService.get('SMTP_ALLOW_SELF_SIGNED')) !== null && _c !== void 0 ? _c : ''}`.toLowerCase() ===
+            'true';
         this.from =
-            (_c = configService.get('SMTP_FROM')) !== null && _c !== void 0 ? _c : 'no-reply@clientproofing.local';
+            (_d = configService.get('SMTP_FROM')) !== null && _d !== void 0 ? _d : 'no-reply@clientproofing.local';
         this.transporter = mailer.createTransport({
             host,
             port,
             secure: port === 465,
             auth: user && pass ? { user, pass } : undefined,
+            tls: allowSelfSigned
+                ? {
+                    rejectUnauthorized: false,
+                }
+                : undefined,
         });
     }
     async sendMagicLink(context) {
@@ -79,7 +86,7 @@ let EmailService = EmailService_1 = class EmailService {
             ...links,
             ...landing,
             '',
-            'These were sent after no new edits were detected for 30 minutes.',
+            'These were sent after no new edits were detected for 30 minutes — the reminder promised in your thank-you note.',
         ].join('\n');
         await this.sendEmail({
             to: context.email,
@@ -96,12 +103,16 @@ let EmailService = EmailService_1 = class EmailService {
         const previewLine = ((_c = context.previews) === null || _c === void 0 ? void 0 : _c.length)
             ? '\n\nWe have attached a few filenames and thumbnails as a quick preview.'
             : '';
+        const roadmap = '\n\nWhat happens next:\n' +
+            '- We finish polishing your edits.\n' +
+            '- Our system watches for new edits and, after 30 quiet minutes, sends a reminder with links.\n' +
+            '- You will get a final note when everything is ready to review and download.';
         const closing = '\n\nYou will receive an update after editing finishes (including the 30-minute checks).';
         const attachments = this.normalizeAttachments(context.previews);
         await this.sendEmail({
             to: context.email,
             subject: 'Thank you – we will notify you when edits are ready',
-            text: `${greeting}${intro}${previewLine}${closing}`,
+            text: `${greeting}${intro}${previewLine}${roadmap}${closing}`,
             attachments,
         });
     }

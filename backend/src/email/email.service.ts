@@ -59,6 +59,9 @@ export class EmailService {
     const port = Number(configService.get<string>('SMTP_PORT') ?? 587);
     const user = configService.get<string>('SMTP_USER');
     const pass = configService.get<string>('SMTP_PASS');
+    const allowSelfSigned =
+      `${configService.get<string>('SMTP_ALLOW_SELF_SIGNED') ?? ''}`.toLowerCase() ===
+      'true';
 
     this.from =
       configService.get<string>('SMTP_FROM') ??
@@ -69,6 +72,11 @@ export class EmailService {
       port,
       secure: port === 465,
       auth: user && pass ? { user, pass } : undefined,
+      tls: allowSelfSigned
+        ? {
+            rejectUnauthorized: false,
+          }
+        : undefined,
     });
   }
 
@@ -123,7 +131,7 @@ export class EmailService {
       ...links,
       ...landing,
       '',
-      'These were sent after no new edits were detected for 30 minutes.',
+      'These were sent after no new edits were detected for 30 minutes — the reminder promised in your thank-you note.',
     ].join('\n');
 
     await this.sendEmail({
@@ -142,6 +150,11 @@ export class EmailService {
     const previewLine = context.previews?.length
       ? '\n\nWe have attached a few filenames and thumbnails as a quick preview.'
       : '';
+    const roadmap =
+      '\n\nWhat happens next:\n' +
+      '- We finish polishing your edits.\n' +
+      '- Our system watches for new edits and, after 30 quiet minutes, sends a reminder with links.\n' +
+      '- You will get a final note when everything is ready to review and download.';
     const closing = '\n\nYou will receive an update after editing finishes (including the 30-minute checks).';
 
     const attachments = this.normalizeAttachments(context.previews);
@@ -149,7 +162,7 @@ export class EmailService {
     await this.sendEmail({
       to: context.email,
       subject: 'Thank you – we will notify you when edits are ready',
-      text: `${greeting}${intro}${previewLine}${closing}`,
+      text: `${greeting}${intro}${previewLine}${roadmap}${closing}`,
       attachments,
     });
   }
