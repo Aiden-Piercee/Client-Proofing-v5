@@ -27,6 +27,9 @@ interface AlbumImage {
   public_url?: string | null;
   selections?: ImageSelectionSummary[];
   filename?: string | null;
+  hasEditedReplacement?: boolean;
+  isEditedReplacement?: boolean;
+  original_image_id?: number | null;
 }
 
 export default function AdminAlbumDetailPage() {
@@ -209,6 +212,17 @@ export default function AdminAlbumDetailPage() {
               key={img.id}
               className="group relative rounded-2xl overflow-hidden border border-white/10 bg-white/5 shadow-lg shadow-black/20"
             >
+              <div className="absolute top-3 left-3 z-10 flex flex-col gap-2">
+                {img.hasEditedReplacement ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/80 px-3 py-1 text-xs font-semibold text-white shadow">
+                    ✨ Edited uploaded
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/80 px-3 py-1 text-xs font-semibold text-white shadow">
+                    ⏳ Pending edit
+                  </span>
+                )}
+              </div>
               <img src={img.public_url || ""} alt="" className="w-full h-full object-cover aspect-[4/3]" loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition" />
               <div className="absolute inset-x-3 bottom-3 space-y-1 text-xs">

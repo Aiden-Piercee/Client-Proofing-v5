@@ -46,12 +46,19 @@ export class AlbumsController {
     return this.albumsService.getAlbum(id);
   }
 
-  @Get(':id/images')
-  async getAlbumImages(
-    @Param('id', ParseIntPipe) id: number,
-    @Query('sessionToken') sessionToken: string
-  ) {
-    const session = await this.sessionService.assertSessionForAlbum(sessionToken, id);
-    return this.albumsService.listImagesForAlbum(id, session.client_id ?? undefined);
-  }
+    @Get(':id/images')
+    async getAlbumImages(
+      @Param('id', ParseIntPipe) id: number,
+      @Query('sessionToken') sessionToken: string
+    ) {
+      const session = await this.sessionService.assertSessionForAlbum(sessionToken, id);
+      if (!session.client_id) {
+        throw new BadRequestException('Session is not linked to a client.');
+      }
+      return this.albumsService.listImagesForAlbum(
+        id,
+        session.client_id,
+        { hideOriginalsWithEdits: true },
+      );
+    }
 }
