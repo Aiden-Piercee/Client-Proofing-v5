@@ -79,7 +79,7 @@ let EmailService = EmailService_1 = class EmailService {
             ...links,
             ...landing,
             '',
-            'These were sent after no new edits were detected for 30 minutes.',
+            'These were sent after no new edits were detected for 30 minutes — the reminder promised in your thank-you note.',
         ].join('\n');
         await this.sendEmail({
             to: context.email,
@@ -96,12 +96,16 @@ let EmailService = EmailService_1 = class EmailService {
         const previewLine = ((_c = context.previews) === null || _c === void 0 ? void 0 : _c.length)
             ? '\n\nWe have attached a few filenames and thumbnails as a quick preview.'
             : '';
+        const roadmap = '\n\nWhat happens next:\n' +
+            '- We finish polishing your edits.\n' +
+            '- Our system watches for new edits and, after 30 quiet minutes, sends a reminder with links.\n' +
+            '- You will get a final note when everything is ready to review and download.';
         const closing = '\n\nYou will receive an update after editing finishes (including the 30-minute checks).';
         const attachments = this.normalizeAttachments(context.previews);
         await this.sendEmail({
             to: context.email,
             subject: 'Thank you – we will notify you when edits are ready',
-            text: `${greeting}${intro}${previewLine}${closing}`,
+            text: `${greeting}${intro}${previewLine}${roadmap}${closing}`,
             attachments,
         });
     }

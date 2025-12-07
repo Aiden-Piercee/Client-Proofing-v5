@@ -67,15 +67,20 @@ let SessionsService = SessionsService_1 = class SessionsService {
         return token;
     }
     async sendMagicLink(albumId, email, clientName, albumTitle) {
-        const token = await this.createSession(albumId, email, clientName);
+        const normalizedEmail = email === null || email === void 0 ? void 0 : email.trim().toLowerCase();
+        if (!normalizedEmail) {
+            throw new common_1.BadRequestException('Email is required to send the magic link.');
+        }
+        const token = await this.createSession(albumId, normalizedEmail, clientName);
         const baseUrl = this.getBaseUrl();
         const link = `${baseUrl}/proofing/${albumId}/client/${token}`;
         await this.emailService.sendMagicLink({
-            email,
+            email: normalizedEmail,
             clientName,
             albumTitle,
             link
         });
+        await this.safeSendThankYou(albumId, normalizedEmail, clientName !== null && clientName !== void 0 ? clientName : null);
         return { token, link };
     }
     async attachEmailToSession(token, email, clientName) {
