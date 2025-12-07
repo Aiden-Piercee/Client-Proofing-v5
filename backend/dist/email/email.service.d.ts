@@ -33,6 +33,8 @@ export interface ThankYouContext {
 export declare class EmailService {
     private readonly logger;
     private readonly transporter;
+    private readonly selfSignedFallback?;
+    private readonly selfSignedEnabled;
     private readonly from;
     constructor(configService: ConfigService);
     sendMagicLink(context: MagicLinkContext): Promise<void>;
@@ -41,4 +43,6 @@ export declare class EmailService {
     sendThankYouForEmailCapture(context: ThankYouContext): Promise<void>;
     private sendEmail;
     private normalizeAttachments;
+    private createTransport;
+    private isSelfSignedError;
 }

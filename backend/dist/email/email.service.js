@@ -26,21 +26,29 @@ let EmailService = EmailService_1 = class EmailService {
         const port = Number((_b = configService.get('SMTP_PORT')) !== null && _b !== void 0 ? _b : 587);
         const user = configService.get('SMTP_USER');
         const pass = configService.get('SMTP_PASS');
-        const allowSelfSigned = `${(_c = configService.get('SMTP_ALLOW_SELF_SIGNED')) !== null && _c !== void 0 ? _c : ''}`.toLowerCase() ===
-            'true';
+        this.selfSignedEnabled =
+            `${(_c = configService.get('SMTP_ALLOW_SELF_SIGNED')) !== null && _c !== void 0 ? _c : ''}`.toLowerCase() ===
+                'true';
         this.from =
             (_d = configService.get('SMTP_FROM')) !== null && _d !== void 0 ? _d : 'no-reply@clientproofing.local';
-        this.transporter = mailer.createTransport({
+        this.transporter = this.createTransport({
+            mailer,
             host,
             port,
-            secure: port === 465,
-            auth: user && pass ? { user, pass } : undefined,
-            tls: allowSelfSigned
-                ? {
-                    rejectUnauthorized: false,
-                }
-                : undefined,
+            user,
+            pass,
+            allowSelfSigned: this.selfSignedEnabled,
         });
+        if (!this.selfSignedEnabled) {
+            this.selfSignedFallback = this.createTransport({
+                mailer,
+                host,
+                port,
+                user,
+                pass,
+                allowSelfSigned: true,
+            });
+        }
     }
     async sendMagicLink(context) {
         var _a, _b;
@@ -128,6 +136,24 @@ let EmailService = EmailService_1 = class EmailService {
             this.logger.log(`Sent email to ${options.to}: ${options.subject}`);
         }
         catch (err) {
+            if (!this.selfSignedEnabled && this.selfSignedFallback && this.isSelfSignedError(err)) {
+                this.logger.warn(`SMTP self-signed certificate detected while sending to ${options.to}; retrying with relaxed TLS.`);
+                try {
+                    await this.selfSignedFallback.sendMail({
+                        from: this.from,
+                        to: options.to,
+                        subject: options.subject,
+                        text: options.text,
+                        attachments: options.attachments,
+                    });
+                    this.logger.log(`Sent email to ${options.to}: ${options.subject}`);
+                    return;
+                }
+                catch (fallbackErr) {
+                    this.logger.error(`Failed sending email to ${options.to} after self-signed retry`, fallbackErr);
+                    throw fallbackErr;
+                }
+            }
             this.logger.error(`Failed sending email to ${options.to}`, err);
             throw err;
         }
@@ -146,6 +172,30 @@ let EmailService = EmailService_1 = class EmailService {
                 content: preview.content,
             });
         });
+    }
+    createTransport(options) {
+        const { mailer, host, port, user, pass, allowSelfSigned } = options;
+        return mailer.createTransport({
+            host,
+            port,
+            secure: port === 465,
+            auth: user && pass ? { user, pass } : undefined,
+            tls: allowSelfSigned
+                ? {
+                    rejectUnauthorized: false,
+                }
+                : undefined,
+        });
+    }
+    isSelfSignedError(err) {
+        var _a, _b;
+        const error = err;
+        const code = `${(_a = error === null || error === void 0 ? void 0 : error.code) !== null && _a !== void 0 ? _a : ''}`.toUpperCase();
+        const message = ((_b = error === null || error === void 0 ? void 0 : error.message) !== null && _b !== void 0 ? _b : '').toLowerCase();
+        return (code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+            code === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
+            code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+            message.includes('self-signed certificate'));
     }
 };
 exports.EmailService = EmailService;

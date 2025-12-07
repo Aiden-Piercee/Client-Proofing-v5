@@ -43,6 +43,8 @@ export interface ThankYouContext {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private readonly transporter: Transporter;
+  private readonly selfSignedFallback?: Transporter;
+  private readonly selfSignedEnabled: boolean;
   private readonly from: string;
 
   constructor(configService: ConfigService) {
@@ -59,7 +61,7 @@ export class EmailService {
     const port = Number(configService.get<string>('SMTP_PORT') ?? 587);
     const user = configService.get<string>('SMTP_USER');
     const pass = configService.get<string>('SMTP_PASS');
-    const allowSelfSigned =
+    this.selfSignedEnabled =
       `${configService.get<string>('SMTP_ALLOW_SELF_SIGNED') ?? ''}`.toLowerCase() ===
       'true';
 
@@ -67,17 +69,25 @@ export class EmailService {
       configService.get<string>('SMTP_FROM') ??
       'no-reply@clientproofing.local';
 
-    this.transporter = mailer.createTransport({
+    this.transporter = this.createTransport({
+      mailer,
       host,
       port,
-      secure: port === 465,
-      auth: user && pass ? { user, pass } : undefined,
-      tls: allowSelfSigned
-        ? {
-            rejectUnauthorized: false,
-          }
-        : undefined,
+      user,
+      pass,
+      allowSelfSigned: this.selfSignedEnabled,
     });
+
+    if (!this.selfSignedEnabled) {
+      this.selfSignedFallback = this.createTransport({
+        mailer,
+        host,
+        port,
+        user,
+        pass,
+        allowSelfSigned: true,
+      });
+    }
   }
 
   async sendMagicLink(context: MagicLinkContext) {
@@ -183,6 +193,29 @@ export class EmailService {
       });
       this.logger.log(`Sent email to ${options.to}: ${options.subject}`);
     } catch (err) {
+      if (!this.selfSignedEnabled && this.selfSignedFallback && this.isSelfSignedError(err)) {
+        this.logger.warn(
+          `SMTP self-signed certificate detected while sending to ${options.to}; retrying with relaxed TLS.`,
+        );
+        try {
+          await this.selfSignedFallback.sendMail({
+            from: this.from,
+            to: options.to,
+            subject: options.subject,
+            text: options.text,
+            attachments: options.attachments,
+          });
+          this.logger.log(`Sent email to ${options.to}: ${options.subject}`);
+          return;
+        } catch (fallbackErr) {
+          this.logger.error(
+            `Failed sending email to ${options.to} after self-signed retry`,
+            fallbackErr as Error,
+          );
+          throw fallbackErr;
+        }
+      }
+
       this.logger.error(`Failed sending email to ${options.to}`, err as Error);
       throw err;
     }
@@ -202,5 +235,41 @@ export class EmailService {
         path: preview.path ?? undefined,
         content: preview.content,
       }));
+  }
+
+  private createTransport(options: {
+    mailer: typeof nodemailer;
+    host?: string;
+    port: number;
+    user?: string;
+    pass?: string;
+    allowSelfSigned: boolean;
+  }): Transporter {
+    const { mailer, host, port, user, pass, allowSelfSigned } = options;
+
+    return mailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: user && pass ? { user, pass } : undefined,
+      tls: allowSelfSigned
+        ? {
+            rejectUnauthorized: false,
+          }
+        : undefined,
+    });
+  }
+
+  private isSelfSignedError(err: unknown): boolean {
+    const error = err as { code?: string; message?: string };
+    const code = `${error?.code ?? ''}`.toUpperCase();
+    const message = (error?.message ?? '').toLowerCase();
+
+    return (
+      code === 'SELF_SIGNED_CERT_IN_CHAIN' ||
+      code === 'DEPTH_ZERO_SELF_SIGNED_CERT' ||
+      code === 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' ||
+      message.includes('self-signed certificate')
+    );
   }
 }
