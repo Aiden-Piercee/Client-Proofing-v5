@@ -12,12 +12,13 @@ const sessions_service_1 = require("./sessions.service");
 const sessions_controller_1 = require("./sessions.controller");
 const database_module_1 = require("../database/database.module");
 const email_module_1 = require("../email/email.module");
+const albums_module_1 = require("../albums/albums.module");
 let SessionsModule = class SessionsModule {
 };
 exports.SessionsModule = SessionsModule;
 exports.SessionsModule = SessionsModule = __decorate([
     (0, common_1.Module)({
-        imports: [database_module_1.DatabaseModule, email_module_1.EmailModule],
+        imports: [database_module_1.DatabaseModule, email_module_1.EmailModule, (0, common_1.forwardRef)(() => albums_module_1.AlbumsModule)],
         controllers: [sessions_controller_1.SessionsController],
         providers: [sessions_service_1.SessionsService],
         exports: [sessions_service_1.SessionsService],

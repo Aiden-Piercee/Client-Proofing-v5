@@ -42,9 +42,9 @@ let KokenService = class KokenService {
             catch (_a) { }
         }));
         return normalized.map((album) => {
-            var _a, _b, _c;
+            var _a, _b, _c, _d, _e, _f;
             const cover = album.cover_id ? coverImages.get(album.cover_id) : null;
-            const cover_url = (_c = (_b = (_a = cover === null || cover === void 0 ? void 0 : cover.thumb) !== null && _a !== void 0 ? _a : cover === null || cover === void 0 ? void 0 : cover.medium) !== null && _b !== void 0 ? _b : cover === null || cover === void 0 ? void 0 : cover.full) !== null && _c !== void 0 ? _c : this.neutralPlaceholder;
+            const cover_url = (_f = (_e = (_d = (_c = (_b = (_a = cover === null || cover === void 0 ? void 0 : cover.large2x) !== null && _a !== void 0 ? _a : cover === null || cover === void 0 ? void 0 : cover.full) !== null && _b !== void 0 ? _b : cover === null || cover === void 0 ? void 0 : cover.large) !== null && _c !== void 0 ? _c : cover === null || cover === void 0 ? void 0 : cover.medium2x) !== null && _d !== void 0 ? _d : cover === null || cover === void 0 ? void 0 : cover.medium) !== null && _e !== void 0 ? _e : cover === null || cover === void 0 ? void 0 : cover.thumb) !== null && _f !== void 0 ? _f : this.neutralPlaceholder;
             return { ...album, cover_url };
         });
     }

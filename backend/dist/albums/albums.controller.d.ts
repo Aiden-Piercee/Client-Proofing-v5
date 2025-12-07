@@ -1,9 +1,11 @@
+import { ConfigService } from '@nestjs/config';
 import { AlbumsService } from './albums.service';
 import { SessionsService } from '../sessions/sessions.service';
 export declare class AlbumsController {
     private readonly albumsService;
     private readonly sessionService;
-    constructor(albumsService: AlbumsService, sessionService: SessionsService);
+    private readonly configService;
+    constructor(albumsService: AlbumsService, sessionService: SessionsService, configService: ConfigService);
     listAlbums(): Promise<(import("mysql2").RowDataPacket & {
         id: number;
         title: string | null;
@@ -14,7 +16,7 @@ export declare class AlbumsController {
     } & {
         cover_url: string;
     })[]>;
-    getAlbum(id: number): Promise<import("mysql2").RowDataPacket & {
+    getAlbum(id: number, sessionToken?: string): Promise<import("mysql2").RowDataPacket & {
         id: number;
         title: string | null;
         slug: string;
@@ -28,5 +30,8 @@ export declare class AlbumsController {
         state: string | null;
         print: boolean;
         edited: any;
+        isEditedReplacement?: boolean;
+        original_image_id?: number | null;
+        hasEditedReplacement?: boolean;
     })[]>;
 }

@@ -21,7 +21,7 @@ exports.AlbumsModule = AlbumsModule = __decorate([
         imports: [
             database_module_1.DatabaseModule,
             koken_module_1.KokenModule,
-            sessions_module_1.SessionsModule,
+            (0, common_1.forwardRef)(() => sessions_module_1.SessionsModule),
         ],
         controllers: [albums_controller_1.AlbumsController],
         providers: [albums_service_1.AlbumsService],

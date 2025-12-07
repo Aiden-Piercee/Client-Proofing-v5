@@ -4,6 +4,7 @@ import {
   forwardRef,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { Pool } from 'mysql2/promise';
@@ -31,6 +32,8 @@ export interface ClientSession extends RowDataPacket {
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(
     @Inject(PROOFING_DB) private proofDb: Pool,
     private readonly emailService: EmailService,
@@ -170,7 +173,7 @@ export class SessionsService {
         [clientName ?? existingSession.client_name ?? normalizedEmail, token],
       );
 
-      await this.sendThankYouForSession(
+      await this.safeSendThankYou(
         Number(existingSession.album_id),
         normalizedEmail,
         clientName ?? existingSession.client_name ?? normalizedEmail,
@@ -192,7 +195,7 @@ export class SessionsService {
       [client.id, clientName ?? client.name ?? normalizedEmail, token],
     );
 
-    await this.sendThankYouForSession(
+    await this.safeSendThankYou(
       Number(existingSession.album_id),
       normalizedEmail,
       clientName ?? client.name ?? normalizedEmail,
@@ -596,6 +599,20 @@ export class SessionsService {
       albumTitle: album?.title ?? null,
       previews,
     });
+  }
+
+  private async safeSendThankYou(
+    albumId: number,
+    email: string,
+    clientName?: string | null,
+  ) {
+    try {
+      await this.sendThankYouForSession(albumId, email, clientName);
+    } catch (err) {
+      this.logger.warn(
+        `Failed to send thank-you email for album ${albumId} to ${email}: ${(err as Error).message}`,
+      );
+    }
   }
 
   private async ensureClient(

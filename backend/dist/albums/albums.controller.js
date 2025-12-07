@@ -14,23 +14,34 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AlbumsController = void 0;
 const common_1 = require("@nestjs/common");
+const config_1 = require("@nestjs/config");
 const albums_service_1 = require("./albums.service");
 const sessions_service_1 = require("../sessions/sessions.service");
 let AlbumsController = class AlbumsController {
-    constructor(albumsService, sessionService) {
+    constructor(albumsService, sessionService, configService) {
         this.albumsService = albumsService;
         this.sessionService = sessionService;
+        this.configService = configService;
     }
     listAlbums() {
         return this.albumsService.listAlbums();
     }
-    getAlbum(id) {
+    async getAlbum(id, sessionToken) {
+        const allowPublicSplash = this.configService.get('ALLOW_PUBLIC_GALLERY_SPLASH') === 'true';
+        if (!allowPublicSplash) {
+            if (!sessionToken) {
+                throw new common_1.ForbiddenException('Gallery access requires a session token.');
+            }
+            const session = await this.sessionService.assertSessionForAlbum(sessionToken, id);
+        }
         return this.albumsService.getAlbum(id);
     }
     async getAlbumImages(id, sessionToken) {
-        var _a;
         const session = await this.sessionService.assertSessionForAlbum(sessionToken, id);
-        return this.albumsService.listImagesForAlbum(id, (_a = session.client_id) !== null && _a !== void 0 ? _a : undefined);
+        if (!session.client_id) {
+            throw new common_1.BadRequestException('Session is not linked to a client.');
+        }
+        return this.albumsService.listImagesForAlbum(id, session.client_id, { hideOriginalsWithEdits: true });
     }
 };
 exports.AlbumsController = AlbumsController;
@@ -43,9 +54,10 @@ __decorate([
 __decorate([
     (0, common_1.Get)(':id'),
     __param(0, (0, common_1.Param)('id', common_1.ParseIntPipe)),
+    __param(1, (0, common_1.Query)('sessionToken')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Number]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:paramtypes", [Number, String]),
+    __metadata("design:returntype", Promise)
 ], AlbumsController.prototype, "getAlbum", null);
 __decorate([
     (0, common_1.Get)(':id/images'),
@@ -58,6 +70,7 @@ __decorate([
 exports.AlbumsController = AlbumsController = __decorate([
     (0, common_1.Controller)('albums'),
     __metadata("design:paramtypes", [albums_service_1.AlbumsService,
-        sessions_service_1.SessionsService])
+        sessions_service_1.SessionsService,
+        config_1.ConfigService])
 ], AlbumsController);
 //# sourceMappingURL=albums.controller.js.map
