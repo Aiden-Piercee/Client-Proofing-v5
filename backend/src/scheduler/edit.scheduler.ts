@@ -6,7 +6,7 @@ import { Pool } from 'mysql2/promise';
 import { KOKEN_DB, PROOFING_DB } from '../config/database.config';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { KokenService } from '../koken/koken.service';
-import { EmailService } from '../email/email.service';
+import { EmailService, PreviewAttachment } from '../email/email.service';
 
 @Injectable()
 export class EditScheduler {
@@ -216,6 +216,7 @@ export class EditScheduler {
   private async sendEditedAlbumNotification(albumId: number) {
     const album = await this.kokenService.getAlbumById(albumId);
     const baseUrl = this.getBaseUrl();
+    const previews = await this.buildAlbumPreviewAttachments(albumId);
 
     const [sessionRows] = await this.proofingDb.query<RowDataPacket[]>(
       `SELECT cs.token, cs.client_name, cs.client_id, cs.email AS session_email, c.email AS client_email
@@ -273,7 +274,26 @@ export class EditScheduler {
         albumTitle: album.title ?? undefined,
         sessionLinks: Array.from(new Set(value.sessionLinks)),
         landingLink: value.landingLink,
+        previews,
       });
+    }
+  }
+
+  private async buildAlbumPreviewAttachments(
+    albumId: number,
+  ): Promise<PreviewAttachment[]> {
+    try {
+      const images = await this.kokenService.listImagesForAlbum(albumId);
+      return images.slice(0, 5).map((img) => ({
+        filename: img.filename,
+        path: img.thumb ?? img.medium ?? img.medium2x ?? img.large ?? undefined,
+        content: img.thumb || img.medium || img.medium2x || img.large
+          ? undefined
+          : `Preview for ${img.filename}`,
+      }));
+    } catch (err) {
+      void err;
+      return [];
     }
   }
 }

@@ -10,7 +10,7 @@ import { Pool } from 'mysql2/promise';
 import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { PROOFING_DB } from '../config/database.config';
 import * as crypto from 'crypto';
-import { EmailService } from '../email/email.service';
+import { EmailService, PreviewAttachment } from '../email/email.service';
 import { AlbumsService } from '../albums/albums.service';
 
 interface ClientRecord extends RowDataPacket {
@@ -170,6 +170,12 @@ export class SessionsService {
         [clientName ?? existingSession.client_name ?? normalizedEmail, token],
       );
 
+      await this.sendThankYouForSession(
+        Number(existingSession.album_id),
+        normalizedEmail,
+        clientName ?? existingSession.client_name ?? normalizedEmail,
+      );
+
       return this.getValidSession(token);
     }
 
@@ -184,6 +190,12 @@ export class SessionsService {
       WHERE token = ?
       `,
       [client.id, clientName ?? client.name ?? normalizedEmail, token],
+    );
+
+    await this.sendThankYouForSession(
+      Number(existingSession.album_id),
+      normalizedEmail,
+      clientName ?? client.name ?? normalizedEmail,
     );
 
     return this.getValidSession(token);
@@ -544,6 +556,46 @@ export class SessionsService {
     }
 
     return rows[0] as ClientSession & { id: number };
+  }
+
+  private async buildPreviewAttachmentsForAlbum(
+    albumId: number,
+  ): Promise<PreviewAttachment[]> {
+    try {
+      const images = await this.albumsService.listImagesForAlbum(albumId);
+      return images.slice(0, 5).map((img) => ({
+        filename: img.filename,
+        path: img.thumb ?? img.medium ?? img.medium2x ?? img.large ?? undefined,
+        content: img.thumb || img.medium || img.medium2x || img.large
+          ? undefined
+          : `Preview for ${img.filename}`,
+      }));
+    } catch (err) {
+      void err;
+      return [];
+    }
+  }
+
+  private async sendThankYouForSession(
+    albumId: number,
+    email: string,
+    clientName?: string | null,
+  ) {
+    if (Number.isNaN(albumId)) {
+      return;
+    }
+
+    const [album, previews] = await Promise.all([
+      this.albumsService.getAlbum(albumId).catch(() => null),
+      this.buildPreviewAttachmentsForAlbum(albumId),
+    ]);
+
+    await this.emailService.sendThankYouForEmailCapture({
+      email,
+      clientName: clientName ?? null,
+      albumTitle: album?.title ?? null,
+      previews,
+    });
   }
 
   private async ensureClient(
