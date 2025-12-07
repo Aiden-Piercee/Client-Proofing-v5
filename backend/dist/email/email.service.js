@@ -16,7 +16,7 @@ const config_1 = require("@nestjs/config");
 const nodemailer_1 = require("nodemailer");
 let EmailService = EmailService_1 = class EmailService {
     constructor(configService) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d;
         this.logger = new common_1.Logger(EmailService_1.name);
         const mailer = (_a = nodemailer_1.default) !== null && _a !== void 0 ? _a : require('nodemailer');
         if (!mailer || !mailer.createTransport) {
@@ -26,13 +26,20 @@ let EmailService = EmailService_1 = class EmailService {
         const port = Number((_b = configService.get('SMTP_PORT')) !== null && _b !== void 0 ? _b : 587);
         const user = configService.get('SMTP_USER');
         const pass = configService.get('SMTP_PASS');
+        const allowSelfSigned = `${(_c = configService.get('SMTP_ALLOW_SELF_SIGNED')) !== null && _c !== void 0 ? _c : ''}`.toLowerCase() ===
+            'true';
         this.from =
-            (_c = configService.get('SMTP_FROM')) !== null && _c !== void 0 ? _c : 'no-reply@clientproofing.local';
+            (_d = configService.get('SMTP_FROM')) !== null && _d !== void 0 ? _d : 'no-reply@clientproofing.local';
         this.transporter = mailer.createTransport({
             host,
             port,
             secure: port === 465,
             auth: user && pass ? { user, pass } : undefined,
+            tls: allowSelfSigned
+                ? {
+                    rejectUnauthorized: false,
+                }
+                : undefined,
         });
     }
     async sendMagicLink(context) {

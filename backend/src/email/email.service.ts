@@ -59,6 +59,9 @@ export class EmailService {
     const port = Number(configService.get<string>('SMTP_PORT') ?? 587);
     const user = configService.get<string>('SMTP_USER');
     const pass = configService.get<string>('SMTP_PASS');
+    const allowSelfSigned =
+      `${configService.get<string>('SMTP_ALLOW_SELF_SIGNED') ?? ''}`.toLowerCase() ===
+      'true';
 
     this.from =
       configService.get<string>('SMTP_FROM') ??
@@ -69,6 +72,11 @@ export class EmailService {
       port,
       secure: port === 465,
       auth: user && pass ? { user, pass } : undefined,
+      tls: allowSelfSigned
+        ? {
+            rejectUnauthorized: false,
+          }
+        : undefined,
     });
   }
 
