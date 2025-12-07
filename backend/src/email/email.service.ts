@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-import { Transporter } from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 
 export interface MagicLinkContext {
   email: string;
@@ -15,6 +14,14 @@ export interface EditedNotificationContext {
   originalId: number;
   editedId: number;
   albumTitle?: string;
+}
+
+export interface EditedAlbumDigestContext {
+  email: string;
+  clientName?: string | null;
+  albumTitle?: string | null;
+  sessionLinks: string[];
+  landingLink?: string;
 }
 
 @Injectable()
@@ -68,6 +75,35 @@ export class EmailService {
       to: context.email,
       subject: 'Edited photo available',
       text: lines.join('\n'),
+    });
+  }
+
+  async sendEditedAlbumDigest(context: EditedAlbumDigestContext) {
+    const header =
+      `Hello ${context.clientName ?? 'there'},` +
+      `\n\n` +
+      `Edited photos are now available for ${context.albumTitle ?? 'your gallery'}.`;
+
+    const links = context.sessionLinks.map((link, idx) => `  ${idx + 1}. ${link}`);
+
+    const landing = context.landingLink
+      ? [``, `Landing page: ${context.landingLink}`]
+      : [];
+
+    const body = [
+      header,
+      '',
+      'Use your magic link(s) below to view the new edits:',
+      ...links,
+      ...landing,
+      '',
+      'These were sent after no new edits were detected for 30 minutes.',
+    ].join('\n');
+
+    await this.sendEmail({
+      to: context.email,
+      subject: 'Edited photos are ready to review',
+      text: body,
     });
   }
 

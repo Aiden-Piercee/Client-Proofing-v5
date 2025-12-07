@@ -44,6 +44,9 @@ export interface Image {
 
   state?: SelectionState;
   edited?: Image | null;
+  isEditedReplacement?: boolean;
+  original_image_id?: number | null;
+  hasEditedReplacement?: boolean;
 
   selections?: ImageSelectionSummary[];
 

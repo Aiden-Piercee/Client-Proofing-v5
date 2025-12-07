@@ -114,6 +114,9 @@ export class AdminService {
         large?: string | null;
         full?: string | null;
         filename?: string | null;
+        hasEditedReplacement?: boolean;
+        isEditedReplacement?: boolean;
+        original_image_id?: number | null;
       }
     >;
 
@@ -126,6 +129,9 @@ export class AdminService {
       full: img.full ?? null,
       filename: img.filename ?? null,
       public_url: img.medium ?? img.thumb ?? img.full ?? null,
+      hasEditedReplacement: !!img.hasEditedReplacement,
+      isEditedReplacement: !!img.isEditedReplacement,
+      original_image_id: img.original_image_id ?? null,
       selections: selectionMap.get(Number(img.id)) ?? [],
     }));
 

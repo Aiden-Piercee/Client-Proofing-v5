@@ -39,6 +39,9 @@ export default async function ClientLandingPage({ params }: PageProps) {
                   <p className="text-neutral-300">
                     {landing.sessions.length} gallery{landing.sessions.length === 1 ? "" : "ies"} ready for you.
                   </p>
+                  <p className="text-sm text-emerald-200 bg-emerald-900/40 border border-emerald-500/40 rounded-xl px-3 py-2 inline-flex items-center gap-2">
+                    ✨ Edited photos are highlighted inside each gallery. Look for the "Edited" tag once you open an album.
+                  </p>
                 </div>
                 <div className="bg-white/10 border border-white/10 rounded-2xl px-4 py-3 text-sm text-neutral-100 shadow-lg shadow-black/30">
                   <p className="font-semibold">Album access</p>

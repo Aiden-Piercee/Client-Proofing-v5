@@ -57,9 +57,11 @@ export default function Lightbox({
       <img src={image.full || image.large} alt="" className="max-w-full max-h-full rounded-lg shadow-xl" />
 
       {/* Edited notice */}
-      {image.edited && (
+      {(image.isEditedReplacement || image.edited || image.hasEditedReplacement) && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-emerald-700 text-white px-4 py-2 rounded shadow">
-          An edited version of this photo is available.
+          {image.isEditedReplacement
+            ? 'You are viewing the edited version of this photo.'
+            : 'An edited version of this photo is available.'}
         </div>
       )}
 

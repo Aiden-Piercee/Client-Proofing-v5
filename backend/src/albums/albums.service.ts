@@ -1,7 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { Pool } from 'mysql2/promise';
+import { RowDataPacket } from 'mysql2';
 import { KokenService, KokenImageRow } from '../koken/koken.service';
 import { PROOFING_DB } from '../config/database.config';
+
+type AlbumImage = KokenImageRow & {
+  state: string | null;
+  print: boolean;
+  edited: any;
+  isEditedReplacement?: boolean;
+  original_image_id?: number | null;
+  hasEditedReplacement?: boolean;
+};
+
+interface ListImageOptions {
+  hideOriginalsWithEdits?: boolean;
+}
 
 @Injectable()
 export class AlbumsService {
@@ -23,24 +37,31 @@ export class AlbumsService {
   async listImagesForAlbum(
     albumId: number,
     clientId?: number,
-  ): Promise<Array<KokenImageRow & { state: string | null; print: boolean; edited: any }>> {
+    options: ListImageOptions = {},
+  ): Promise<AlbumImage[]> {
     const images = await this.kokenService.listImagesForAlbum(albumId);
     const imageIds = images.map((img) => img.id);
 
     // --- Load client selections (state + print) ---
-    let selectionMap = new Map<number, string>();
+    let selectionMap = new Map<number, string | null>();
     let printMap = new Map<number, boolean>();
 
     if (clientId) {
-      const [rows] = await this.proofingDb.query<any[]>(
+      const [rows] = await this.proofingDb.query<RowDataPacket[]>(
         `SELECT image_id, state, print
          FROM client_selections
          WHERE client_id = ?`,
         [clientId],
       );
 
-      selectionMap = new Map(rows.map((row) => [row.image_id, row.state]));
-      printMap = new Map(rows.map((row) => [row.image_id, !!row.print]));
+      const typedRows = rows as Array<RowDataPacket & { image_id: number; state: string | null; print: number | null }>;
+
+      selectionMap = new Map(
+        typedRows.map((row) => [Number(row.image_id), row.state ?? null]),
+      );
+      printMap = new Map(
+        typedRows.map((row) => [Number(row.image_id), !!row.print]),
+      );
     }
 
     // --- Load image replacements (edited images) ---
@@ -49,28 +70,60 @@ export class AlbumsService {
     if (imageIds.length) {
       const placeholders = imageIds.map(() => '?').join(',');
 
-      const [rows] = await this.proofingDb.query<any[]>(
+      const [rows] = await this.proofingDb.query<RowDataPacket[]>(
         `SELECT original_image_id, edited_image_id
          FROM image_replacements
          WHERE original_image_id IN (${placeholders})`,
         imageIds,
       );
 
-      for (const row of rows) {
+      const typedRows = rows as Array<RowDataPacket & { original_image_id: number; edited_image_id: number }>;
+
+      for (const row of typedRows) {
         const editedImage = await this.kokenService.getImageById(
-          row.edited_image_id,
+          Number(row.edited_image_id),
         );
-        replacements.set(row.original_image_id, editedImage);
+        replacements.set(Number(row.original_image_id), editedImage);
       }
     }
 
-    // --- Construct output ---
-    return images.map((img) => ({
-      ...img,
-      state: selectionMap.get(img.id) ?? null,
-      print: printMap.get(img.id) ?? false,      // NEW
-      edited: replacements.get(img.id) ?? null,
-    }));
+    const hideOriginalsWithEdits = options.hideOriginalsWithEdits ?? false;
+
+    const payload: AlbumImage[] = [];
+
+    images.forEach((img) => {
+      const replacement = replacements.get(img.id) ?? null;
+
+      if (replacement && hideOriginalsWithEdits) {
+        const replacementState =
+          selectionMap.get(replacement.id) ?? selectionMap.get(img.id) ?? null;
+        const replacementPrint =
+          printMap.get(replacement.id) ?? printMap.get(img.id) ?? false;
+
+        payload.push({
+          ...replacement,
+          state: replacementState,
+          print: replacementPrint,
+          edited: null,
+          isEditedReplacement: true,
+          original_image_id: img.id,
+          hasEditedReplacement: true,
+        });
+        return;
+      }
+
+      payload.push({
+        ...img,
+        state: selectionMap.get(img.id) ?? null,
+        print: printMap.get(img.id) ?? false,
+        edited: replacement,
+        hasEditedReplacement: !!replacement,
+        original_image_id: null,
+        isEditedReplacement: false,
+      });
+    });
+
+    return payload;
   }
 
   /** Admin panel: album list INCLUDING session counts */
@@ -82,7 +135,7 @@ export class AlbumsService {
 
     const placeholders = albumIds.map(() => '?').join(',');
 
-    const [rows] = await this.proofingDb.query<any[]>(
+    const [rows] = await this.proofingDb.query<RowDataPacket[]>(
       `SELECT album_id, COUNT(*) AS session_count
        FROM client_sessions
        WHERE album_id IN (${placeholders})
@@ -90,7 +143,13 @@ export class AlbumsService {
       albumIds,
     );
 
-    const counts = new Map(rows.map((r) => [r.album_id, r.session_count]));
+    const typedRows = rows as Array<
+      RowDataPacket & { album_id: number; session_count: number }
+    >;
+
+    const counts = new Map(
+      typedRows.map((r) => [Number(r.album_id), Number(r.session_count)]),
+    );
 
     return albums.map((album) => ({
       ...album,
