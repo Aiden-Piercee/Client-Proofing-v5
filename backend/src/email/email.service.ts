@@ -31,6 +31,15 @@ export class EmailService {
   private readonly from: string;
 
   constructor(configService: ConfigService) {
+    const mailer =
+      (nodemailer as typeof import('nodemailer') | undefined) ??
+      // Fallback for environments where the default import is undefined
+      (require('nodemailer') as typeof import('nodemailer'));
+
+    if (!mailer || !mailer.createTransport) {
+      throw new Error('Nodemailer is not available to create a transport');
+    }
+
     const host = configService.get<string>('SMTP_HOST');
     const port = Number(configService.get<string>('SMTP_PORT') ?? 587);
     const user = configService.get<string>('SMTP_USER');
@@ -40,7 +49,7 @@ export class EmailService {
       configService.get<string>('SMTP_FROM') ??
       'no-reply@clientproofing.local';
 
-    this.transporter = nodemailer.createTransport({
+    this.transporter = mailer.createTransport({
       host,
       port,
       secure: port === 465,
