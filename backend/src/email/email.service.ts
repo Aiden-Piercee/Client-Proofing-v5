@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { Transporter } from 'nodemailer';
+import { Attachment } from 'nodemailer/lib/mailer';
 
 export interface MagicLinkContext {
   email: string;
@@ -22,6 +23,20 @@ export interface EditedAlbumDigestContext {
   albumTitle?: string | null;
   sessionLinks: string[];
   landingLink?: string;
+  previews?: PreviewAttachment[];
+}
+
+export interface PreviewAttachment {
+  filename: string;
+  path?: string;
+  content?: string;
+}
+
+export interface ThankYouContext {
+  email: string;
+  clientName?: string | null;
+  albumTitle?: string | null;
+  previews?: PreviewAttachment[];
 }
 
 @Injectable()
@@ -99,6 +114,8 @@ export class EmailService {
       ? [``, `Landing page: ${context.landingLink}`]
       : [];
 
+    const attachments = this.normalizeAttachments(context.previews);
+
     const body = [
       header,
       '',
@@ -113,6 +130,27 @@ export class EmailService {
       to: context.email,
       subject: 'Edited photos are ready to review',
       text: body,
+      attachments,
+    });
+  }
+
+  async sendThankYouForEmailCapture(context: ThankYouContext) {
+    const greeting = `Hello ${context.clientName ?? 'there'},\n\n`;
+    const intro =
+      `Thank you for sharing your email for ${context.albumTitle ?? 'your gallery'}. ` +
+      `We will notify you as soon as your edited photos are completed and ready for download.`;
+    const previewLine = context.previews?.length
+      ? '\n\nWe have attached a few filenames and thumbnails as a quick preview.'
+      : '';
+    const closing = '\n\nYou will receive an update after editing finishes (including the 30-minute checks).';
+
+    const attachments = this.normalizeAttachments(context.previews);
+
+    await this.sendEmail({
+      to: context.email,
+      subject: 'Thank you – we will notify you when edits are ready',
+      text: `${greeting}${intro}${previewLine}${closing}`,
+      attachments,
     });
   }
 
@@ -120,6 +158,7 @@ export class EmailService {
     to: string;
     subject: string;
     text: string;
+    attachments?: Attachment[];
   }) {
     try {
       await this.transporter.sendMail({
@@ -127,11 +166,28 @@ export class EmailService {
         to: options.to,
         subject: options.subject,
         text: options.text,
+        attachments: options.attachments,
       });
       this.logger.log(`Sent email to ${options.to}: ${options.subject}`);
     } catch (err) {
       this.logger.error(`Failed sending email to ${options.to}`, err as Error);
       throw err;
     }
+  }
+
+  private normalizeAttachments(
+    previews?: PreviewAttachment[],
+  ): Attachment[] | undefined {
+    if (!previews || previews.length === 0) {
+      return undefined;
+    }
+
+    return previews
+      .filter((preview) => preview.filename && (preview.path || preview.content))
+      .map<Attachment>((preview) => ({
+        filename: preview.filename,
+        path: preview.path ?? undefined,
+        content: preview.content,
+      }));
   }
 }

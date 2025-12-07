@@ -11,6 +11,25 @@ export interface EditedNotificationContext {
     editedId: number;
     albumTitle?: string;
 }
+export interface EditedAlbumDigestContext {
+    email: string;
+    clientName?: string | null;
+    albumTitle?: string | null;
+    sessionLinks: string[];
+    landingLink?: string;
+    previews?: PreviewAttachment[];
+}
+export interface PreviewAttachment {
+    filename: string;
+    path?: string;
+    content?: string;
+}
+export interface ThankYouContext {
+    email: string;
+    clientName?: string | null;
+    albumTitle?: string | null;
+    previews?: PreviewAttachment[];
+}
 export declare class EmailService {
     private readonly logger;
     private readonly transporter;
@@ -18,5 +37,8 @@ export declare class EmailService {
     constructor(configService: ConfigService);
     sendMagicLink(context: MagicLinkContext): Promise<void>;
     sendEditedNotification(context: EditedNotificationContext): Promise<void>;
+    sendEditedAlbumDigest(context: EditedAlbumDigestContext): Promise<void>;
+    sendThankYouForEmailCapture(context: ThankYouContext): Promise<void>;
     private sendEmail;
+    private normalizeAttachments;
 }

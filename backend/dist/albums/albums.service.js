@@ -27,7 +27,8 @@ let AlbumsService = class AlbumsService {
     getAlbum(id) {
         return this.kokenService.getAlbumById(id);
     }
-    async listImagesForAlbum(albumId, clientId) {
+    async listImagesForAlbum(albumId, clientId, options = {}) {
+        var _a;
         const images = await this.kokenService.listImagesForAlbum(albumId);
         const imageIds = images.map((img) => img.id);
         let selectionMap = new Map();
@@ -36,8 +37,9 @@ let AlbumsService = class AlbumsService {
             const [rows] = await this.proofingDb.query(`SELECT image_id, state, print
          FROM client_selections
          WHERE client_id = ?`, [clientId]);
-            selectionMap = new Map(rows.map((row) => [row.image_id, row.state]));
-            printMap = new Map(rows.map((row) => [row.image_id, !!row.print]));
+            const typedRows = rows;
+            selectionMap = new Map(typedRows.map((row) => { var _a; return [Number(row.image_id), (_a = row.state) !== null && _a !== void 0 ? _a : null]; }));
+            printMap = new Map(typedRows.map((row) => [Number(row.image_id), !!row.print]));
         }
         let replacements = new Map();
         if (imageIds.length) {
@@ -45,20 +47,42 @@ let AlbumsService = class AlbumsService {
             const [rows] = await this.proofingDb.query(`SELECT original_image_id, edited_image_id
          FROM image_replacements
          WHERE original_image_id IN (${placeholders})`, imageIds);
-            for (const row of rows) {
-                const editedImage = await this.kokenService.getImageById(row.edited_image_id);
-                replacements.set(row.original_image_id, editedImage);
+            const typedRows = rows;
+            for (const row of typedRows) {
+                const editedImage = await this.kokenService.getImageById(Number(row.edited_image_id));
+                replacements.set(Number(row.original_image_id), editedImage);
             }
         }
-        return images.map((img) => {
-            var _a, _b, _c;
-            return ({
+        const hideOriginalsWithEdits = (_a = options.hideOriginalsWithEdits) !== null && _a !== void 0 ? _a : false;
+        const payload = [];
+        images.forEach((img) => {
+            var _a, _b, _c, _d, _e, _f, _g;
+            const replacement = (_a = replacements.get(img.id)) !== null && _a !== void 0 ? _a : null;
+            if (replacement && hideOriginalsWithEdits) {
+                const replacementState = (_c = (_b = selectionMap.get(replacement.id)) !== null && _b !== void 0 ? _b : selectionMap.get(img.id)) !== null && _c !== void 0 ? _c : null;
+                const replacementPrint = (_e = (_d = printMap.get(replacement.id)) !== null && _d !== void 0 ? _d : printMap.get(img.id)) !== null && _e !== void 0 ? _e : false;
+                payload.push({
+                    ...replacement,
+                    state: replacementState,
+                    print: replacementPrint,
+                    edited: null,
+                    isEditedReplacement: true,
+                    original_image_id: img.id,
+                    hasEditedReplacement: true,
+                });
+                return;
+            }
+            payload.push({
                 ...img,
-                state: (_a = selectionMap.get(img.id)) !== null && _a !== void 0 ? _a : null,
-                print: (_b = printMap.get(img.id)) !== null && _b !== void 0 ? _b : false,
-                edited: (_c = replacements.get(img.id)) !== null && _c !== void 0 ? _c : null,
+                state: (_f = selectionMap.get(img.id)) !== null && _f !== void 0 ? _f : null,
+                print: (_g = printMap.get(img.id)) !== null && _g !== void 0 ? _g : false,
+                edited: replacement,
+                hasEditedReplacement: !!replacement,
+                original_image_id: null,
+                isEditedReplacement: false,
             });
         });
+        return payload;
     }
     async getAllAlbumsWithCounts() {
         const albums = await this.kokenService.listAlbums();
@@ -70,7 +94,8 @@ let AlbumsService = class AlbumsService {
        FROM client_sessions
        WHERE album_id IN (${placeholders})
        GROUP BY album_id`, albumIds);
-        const counts = new Map(rows.map((r) => [r.album_id, r.session_count]));
+        const typedRows = rows;
+        const counts = new Map(typedRows.map((r) => [Number(r.album_id), Number(r.session_count)]));
         return albums.map((album) => {
             var _a;
             return ({
