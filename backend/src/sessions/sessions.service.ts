@@ -138,7 +138,39 @@ export class SessionsService {
     const existingSession = await this.getValidSession(token);
 
     if (existingSession.client_id) {
-      return existingSession;
+      if (existingSession.email) {
+        return existingSession;
+      }
+
+      if (!existingSession.client_id) {
+        throw new BadRequestException('Session is missing client linkage.');
+      }
+
+      await this.proofDb.query(
+        `
+        UPDATE clients
+        SET email = ?,
+            name = COALESCE(name, ?)
+        WHERE id = ?
+        `,
+        [
+          normalizedEmail,
+          clientName ?? existingSession.client_name ?? normalizedEmail,
+          existingSession.client_id,
+        ],
+      );
+
+      await this.proofDb.query(
+        `
+        UPDATE client_sessions
+        SET client_name = ?,
+            expires_at = COALESCE(expires_at, DATE_ADD(NOW(), INTERVAL 30 DAY))
+        WHERE token = ?
+        `,
+        [clientName ?? existingSession.client_name ?? normalizedEmail, token],
+      );
+
+      return this.getValidSession(token);
     }
 
     const client = await this.ensureClient(normalizedEmail, clientName);
