@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as nodemailer from 'nodemailer';
-import { Transporter } from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 
 export interface MagicLinkContext {
   email: string;
@@ -17,6 +16,14 @@ export interface EditedNotificationContext {
   albumTitle?: string;
 }
 
+export interface EditedAlbumDigestContext {
+  email: string;
+  clientName?: string | null;
+  albumTitle?: string | null;
+  sessionLinks: string[];
+  landingLink?: string;
+}
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -24,6 +31,15 @@ export class EmailService {
   private readonly from: string;
 
   constructor(configService: ConfigService) {
+    const mailer =
+      (nodemailer as typeof import('nodemailer') | undefined) ??
+      // Fallback for environments where the default import is undefined
+      (require('nodemailer') as typeof import('nodemailer'));
+
+    if (!mailer || !mailer.createTransport) {
+      throw new Error('Nodemailer is not available to create a transport');
+    }
+
     const host = configService.get<string>('SMTP_HOST');
     const port = Number(configService.get<string>('SMTP_PORT') ?? 587);
     const user = configService.get<string>('SMTP_USER');
@@ -33,7 +49,7 @@ export class EmailService {
       configService.get<string>('SMTP_FROM') ??
       'no-reply@clientproofing.local';
 
-    this.transporter = nodemailer.createTransport({
+    this.transporter = mailer.createTransport({
       host,
       port,
       secure: port === 465,
@@ -68,6 +84,35 @@ export class EmailService {
       to: context.email,
       subject: 'Edited photo available',
       text: lines.join('\n'),
+    });
+  }
+
+  async sendEditedAlbumDigest(context: EditedAlbumDigestContext) {
+    const header =
+      `Hello ${context.clientName ?? 'there'},` +
+      `\n\n` +
+      `Edited photos are now available for ${context.albumTitle ?? 'your gallery'}.`;
+
+    const links = context.sessionLinks.map((link, idx) => `  ${idx + 1}. ${link}`);
+
+    const landing = context.landingLink
+      ? [``, `Landing page: ${context.landingLink}`]
+      : [];
+
+    const body = [
+      header,
+      '',
+      'Use your magic link(s) below to view the new edits:',
+      ...links,
+      ...landing,
+      '',
+      'These were sent after no new edits were detected for 30 minutes.',
+    ].join('\n');
+
+    await this.sendEmail({
+      to: context.email,
+      subject: 'Edited photos are ready to review',
+      text: body,
     });
   }
 

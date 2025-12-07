@@ -35,7 +35,9 @@ export default function ImageCard({
   return (
     <div
       data-image-card
-      className="relative group cursor-pointer overflow-hidden rounded-lg bg-neutral-800 transition shadow-md hover:shadow-lg"
+      className={`relative group cursor-pointer overflow-hidden rounded-lg bg-neutral-800 transition shadow-md hover:shadow-lg ${
+        image.isEditedReplacement ? 'ring-2 ring-emerald-400/70 shadow-emerald-500/30' : ''
+      }`}
       onClick={onClick}
     >
       <img
@@ -118,6 +120,12 @@ export default function ImageCard({
 
         {image.print && (
           <div className="bg-yellow-600 text-xs px-2 py-1 rounded text-white">🖨️ Print</div>
+        )}
+
+        {image.isEditedReplacement && (
+          <div className="inline-flex items-center gap-1 rounded bg-emerald-600/80 px-2 py-1 text-[11px] font-semibold text-white shadow">
+            ✨ Edited
+          </div>
         )}
       </div>
 
