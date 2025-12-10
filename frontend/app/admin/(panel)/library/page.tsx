@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 interface LibraryAlbum {
-  id: number;
+  id: number | string;
   title: string | null;
   image_count?: number | null;
   visibility?: number | string;
@@ -43,6 +43,11 @@ function formatTimestamp(value?: number | string | null) {
   return date.toLocaleString();
 }
 
+function parseAlbumId(id: number | string | null | undefined) {
+  const numeric = typeof id === "string" ? Number(id) : id;
+  return Number.isFinite(numeric) ? (numeric as number) : null;
+}
+
 export default function LibraryPage() {
   const [albums, setAlbums] = useState<LibraryAlbum[]>([]);
   const [selectedAlbumId, setSelectedAlbumId] = useState<number | null>(null);
@@ -70,9 +75,14 @@ export default function LibraryPage() {
 
         if (!res.ok) throw new Error("Unable to load albums from Koken");
         const data: LibraryAlbum[] = await res.json();
+        const firstNumericAlbum = data.find((album) => parseAlbumId(album.id) !== null);
+
         setAlbums(data);
-        if (data.length > 0) {
-          setSelectedAlbumId(data[0].id);
+
+        if (firstNumericAlbum) {
+          setSelectedAlbumId(parseAlbumId(firstNumericAlbum.id));
+        } else {
+          setError("No albums with a valid numeric id were returned from Koken.");
         }
       } catch (err: any) {
         console.error(err);
@@ -90,6 +100,7 @@ export default function LibraryPage() {
       if (!selectedAlbumId) return;
       try {
         setLoadingImages(true);
+        setError(null);
         const API = process.env.NEXT_PUBLIC_API_URL;
         if (!API) throw new Error("NEXT_PUBLIC_API_URL missing");
         const token = localStorage.getItem("admin_token");
@@ -202,11 +213,20 @@ export default function LibraryPage() {
                 <p className="text-neutral-400 text-sm">No albums found.</p>
               )}
               {albums.map((album) => {
-                const active = album.id === selectedAlbumId;
+                const active = parseAlbumId(album.id) === selectedAlbumId;
                 return (
                   <button
                     key={album.id}
-                    onClick={() => setSelectedAlbumId(album.id)}
+                    onClick={() => {
+                      const parsed = parseAlbumId(album.id);
+                      if (parsed === null) {
+                        setError("Album id is not numeric, unable to load details.");
+                        return;
+                      }
+
+                      setError(null);
+                      setSelectedAlbumId(parsed);
+                    }}
                     className={`w-full flex items-start gap-3 rounded-lg px-3 py-2 text-left transition border ${
                       active
                         ? "bg-white/10 border-white/20 text-white"
