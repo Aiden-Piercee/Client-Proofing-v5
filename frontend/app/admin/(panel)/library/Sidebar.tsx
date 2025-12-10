@@ -54,17 +54,17 @@ export function Sidebar({
   };
 
   const baseButton =
-    "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition";
+    "w-full flex items-center justify-between px-2.5 py-2 rounded-[5px] text-[13px] text-[#a4a4a4] hover:bg-[rgba(255,255,255,0.04)] hover:text-white transition duration-125";
 
   const selectedClass =
-    "bg-white/10 text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)] shadow-amber-500/20";
+    "bg-[rgba(255,255,255,0.08)] text-white border-l-[3px] border-l-[#c88b4b]";
 
   return (
-    <aside className="bg-neutral-900/60 border border-white/5 rounded-2xl p-4 space-y-4 text-sm text-neutral-300 h-full shadow-inner shadow-black/40">
+    <aside className="bg-[#1c1c1c] border border-[rgba(255,255,255,0.05)] rounded-[6px] p-3 space-y-4 text-[13px] text-[#a4a4a4] h-full shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
       <div className="space-y-1">
-        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.22em] text-[#6f6f6f]">
           <span>Content</span>
-          <span className="h-px flex-1 ml-3 bg-white/5" />
+          <span className="h-px flex-1 ml-3 bg-[rgba(255,255,255,0.06)]" />
         </div>
         {["content", "lastImport", "favorites", "featured", "quick", "unlisted", "private"].map((key) => {
           const filter = key as FilterOption;
@@ -95,23 +95,23 @@ export function Sidebar({
               className={`${baseButton} ${isFilterActive(filter) ? selectedClass : ""}`}
             >
               <div className="flex items-center gap-3">
-                <span className="text-neutral-500">{icons[filter]}</span>
-                <span>{labelMap[filter]}</span>
+                <span className="text-[12px] text-[#6f6f6f]">{icons[filter]}</span>
+                <span className="leading-tight">{labelMap[filter]}</span>
               </div>
-              <span className="text-[10px] text-neutral-500">›</span>
+              <span className="text-[10px] text-[#6f6f6f]">›</span>
             </button>
           );
         })}
       </div>
 
       <div className="pt-1 space-y-2">
-        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.22em] text-[#6f6f6f]">
           <span>Date published</span>
-          <span className="h-px flex-1 ml-3 bg-white/5" />
+          <span className="h-px flex-1 ml-3 bg-[rgba(255,255,255,0.06)]" />
         </div>
         <div className="max-h-48 overflow-y-auto pr-1 space-y-1">
           {years.length === 0 && (
-            <p className="text-xs text-neutral-500">Waiting for content timestamps…</p>
+            <p className="text-[12px] text-[#6f6f6f]">Waiting for content timestamps…</p>
           )}
           {years.map((year) => (
             <button
@@ -120,19 +120,19 @@ export function Sidebar({
               className={`${baseButton} ${isFilterActive("year", year) ? selectedClass : ""}`}
             >
               <span className="flex items-center gap-3">
-                <span className="text-neutral-500">⟲</span>
-                <span>{year}</span>
+                <span className="text-[12px] text-[#6f6f6f]">⟲</span>
+                <span className="leading-tight">{year}</span>
               </span>
-              <span className="text-[10px] text-neutral-500">›</span>
+              <span className="text-[10px] text-[#6f6f6f]">›</span>
             </button>
           ))}
         </div>
       </div>
 
       <div className="pt-2 space-y-3">
-        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+        <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.22em] text-[#6f6f6f]">
           <span>Collections</span>
-          <span className="h-px flex-1 ml-3 bg-white/5" />
+          <span className="h-px flex-1 ml-3 bg-[rgba(255,255,255,0.06)]" />
         </div>
 
         <CollectionGroup
@@ -191,7 +191,7 @@ function CollectionGroup({ title, albums, activeContext, onSelectAlbum, loading 
 
   return (
     <div className="space-y-1">
-      <p className="text-[11px] uppercase tracking-[0.25em] text-neutral-500">{title}</p>
+      <p className="text-[11px] uppercase tracking-[0.22em] text-[#6f6f6f]">{title}</p>
       {albums.map((album) => {
         const active = activeContext.scope === "album" && activeContext.albumId === Number(album.id);
         return (
@@ -200,16 +200,16 @@ function CollectionGroup({ title, albums, activeContext, onSelectAlbum, loading 
             onClick={() => onSelectAlbum(Number(album.id), album.title ?? undefined)}
             className={`${
               active
-                ? "bg-white/10 text-white border border-white/10"
-                : "text-neutral-300 hover:text-white border border-transparent hover:border-white/10"
-            } w-full rounded-lg px-3 py-2 flex items-center justify-between transition`}
+                ? "bg-[rgba(255,255,255,0.08)] text-white border-l-[3px] border-l-[#c88b4b]"
+                : "text-[#a4a4a4] hover:text-white border border-transparent hover:border-[rgba(255,255,255,0.08)] hover:bg-[rgba(255,255,255,0.04)]"
+            } w-full rounded-[5px] px-3 py-2 flex items-center justify-between transition duration-125`}
           >
             <div className="flex items-center gap-2 min-w-0">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shadow-[0_0_0_6px_rgba(227,154,76,0.15)]" />
-              <span className="truncate text-left">{album.title || "Untitled"}</span>
+              <span className="h-1.5 w-1.5 rounded-full bg-[#c88b4b]" />
+              <span className="truncate text-left leading-tight">{album.title || "Untitled"}</span>
             </div>
             {album.image_count !== undefined && (
-              <span className="text-[11px] text-neutral-500">{album.image_count}</span>
+              <span className="text-[11px] text-[#6f6f6f]">{album.image_count}</span>
             )}
           </button>
         );

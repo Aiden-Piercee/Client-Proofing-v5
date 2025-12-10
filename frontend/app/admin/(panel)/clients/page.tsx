@@ -76,25 +76,25 @@ export default function ClientListPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-neutral-400 mb-2">Clients</p>
-          <h1 className="text-3xl font-semibold text-white">Client list</h1>
-          <p className="text-neutral-400 mt-1">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-[#6f6f6f] mb-1">Clients</p>
+          <h1 className="text-[18px] font-semibold text-white leading-tight">Client list</h1>
+          <p className="text-[#a4a4a4] mt-1 leading-relaxed">
             Human-friendly overview of every client, their galleries, and how many originals versus edits they hold.
           </p>
         </div>
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-3 py-1.5">
+        <div className="flex items-center gap-2 bg-[#1f1f1f] border border-[rgba(255,255,255,0.08)] rounded-[6px] px-3 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, email, or ID"
-            className="bg-transparent text-sm text-white placeholder:text-neutral-400 focus:outline-none"
+            className="bg-transparent text-[13px] text-white placeholder:text-[#6f6f6f] focus:outline-none"
           />
         </div>
       </div>
 
       <div className="grid gap-4">
         {filteredClients.length === 0 && (
-          <p className="text-neutral-400">No clients found.</p>
+          <p className="text-[#a4a4a4]">No clients found.</p>
         )}
 
         {filteredClients.map((client) => {
@@ -104,20 +104,20 @@ export default function ClientListPage() {
           return (
             <div
               key={client.id}
-              className="bg-white/5 border border-white/10 rounded-2xl p-5 shadow-lg shadow-black/20 space-y-5"
+              className="bg-[#1f1f1f] border border-[rgba(255,255,255,0.05)] rounded-[6px] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.35)] space-y-5"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="text-xs uppercase tracking-[0.25em] text-neutral-400">Client</p>
-                  <h2 className="text-2xl font-semibold text-white">{client.name || "Unnamed client"}</h2>
-                  <p className="text-sm text-neutral-300">ID: {client.id}</p>
-                  <p className="text-sm text-neutral-300 break-all">
+                  <p className="text-[11px] uppercase tracking-[0.2em] text-[#6f6f6f]">Client</p>
+                  <h2 className="text-[17px] font-semibold text-white leading-tight">{client.name || "Unnamed client"}</h2>
+                  <p className="text-[13px] text-[#a4a4a4]">ID: {client.id}</p>
+                  <p className="text-[13px] text-[#a4a4a4] break-all">
                     {client.email ? (
-                      <a href={`mailto:${client.email}`} className="hover:text-white underline">
+                      <a href={`mailto:${client.email}`} className="hover:text-white underline decoration-[#c88b4b]">
                         {client.email}
                       </a>
                     ) : (
-                      <span className="italic text-neutral-500">No email on file</span>
+                      <span className="italic text-[#6f6f6f]">No email on file</span>
                     )}
                   </p>
                   {client.tokens.length > 0 && (
@@ -125,35 +125,35 @@ export default function ClientListPage() {
                       {client.tokens.slice(0, 3).map((token) => (
                         <span
                           key={token}
-                          className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/15 px-3 py-1 text-xs text-white font-mono"
+                          className="inline-flex items-center gap-2 rounded-[5px] bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] px-3 py-1 text-[12px] text-white font-mono"
                         >
                           Token: {token.substring(0, 8)}…
                         </span>
                       ))}
                       {client.tokens.length > 3 && (
-                        <span className="text-xs text-neutral-400">+{client.tokens.length - 3} more</span>
+                        <span className="text-[12px] text-[#6f6f6f]">+{client.tokens.length - 3} more</span>
                       )}
                     </div>
                   )}
                 </div>
 
                 <div className="flex flex-col items-end gap-2 text-right">
-                  <div className="flex items-center gap-2 bg-white/10 border border-white/15 rounded-xl px-3 py-2">
+                  <div className="flex items-center gap-2 bg-[#1a1a1a] border border-[rgba(255,255,255,0.08)] rounded-[6px] px-3 py-2">
                     <div className="text-left">
-                      <p className="text-xs uppercase tracking-[0.2em] text-neutral-300">Albums</p>
-                      <p className="text-white font-semibold text-lg">{albumCount}</p>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Albums</p>
+                      <p className="text-white font-semibold text-[16px]">{albumCount}</p>
                     </div>
-                    <div className="h-10 w-px bg-white/10" />
+                    <div className="h-10 w-px bg-[rgba(255,255,255,0.08)]" />
                     <div className="text-left">
-                      <p className="text-xs uppercase tracking-[0.2em] text-neutral-300">Images</p>
-                      <p className="text-white font-semibold text-lg">{totalImages}</p>
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Images</p>
+                      <p className="text-white font-semibold text-[16px]">{totalImages}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-neutral-200">
-                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-300/30 text-emerald-100">
+                  <div className="flex items-center gap-2 text-[13px] text-white">
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-[5px] bg-[rgba(34,197,94,0.12)] border border-[rgba(34,197,94,0.4)] text-emerald-100">
                       Originals: {client.original_total}
                     </span>
-                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-indigo-500/10 border border-indigo-300/30 text-indigo-100">
+                    <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-[5px] bg-[rgba(99,102,241,0.12)] border border-[rgba(99,102,241,0.35)] text-indigo-100">
                       -Edit: {client.edited_total}
                     </span>
                   </div>
@@ -161,9 +161,9 @@ export default function ClientListPage() {
               </div>
 
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.2em] text-neutral-400">Assigned galleries</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Assigned galleries</p>
                 {client.albums.length === 0 && (
-                  <p className="text-neutral-400 text-sm">No galleries linked yet.</p>
+                  <p className="text-[#a4a4a4] text-[13px]">No galleries linked yet.</p>
                 )}
                 {client.albums.length > 0 && (
                   <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -172,25 +172,25 @@ export default function ClientListPage() {
                       return (
                         <div
                           key={`${client.id}-${album.album_id}`}
-                          className="group bg-white/5 border border-white/10 rounded-xl overflow-hidden shadow-md shadow-black/20"
+                          className="group bg-[#1a1a1a] border border-[rgba(255,255,255,0.08)] rounded-[6px] overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.35)]"
                         >
-                          <div className="aspect-[16/9] bg-neutral-900 overflow-hidden">
+                          <div className="aspect-[16/9] bg-[#0f0f0f] overflow-hidden">
                             <img
                               src={cover}
                               alt={album.album?.title || `Album ${album.album_id}`}
-                              className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                              className="h-full w-full object-cover transition duration-150 group-hover:scale-[1.02]"
                               loading="lazy"
                             />
                           </div>
                           <div className="p-3 space-y-2">
                             <div className="flex items-center justify-between gap-2">
                               <div className="min-w-0">
-                                <p className="text-sm text-white font-semibold truncate">
+                                <p className="text-[13px] text-white font-semibold truncate leading-tight">
                                   {album.album?.title || "Untitled album"}
                                 </p>
-                                <p className="text-xs text-neutral-400">Album #{album.album_id}</p>
+                                <p className="text-[12px] text-[#6f6f6f]">Album #{album.album_id}</p>
                               </div>
-                              <div className="text-right text-xs text-neutral-300">
+                              <div className="text-right text-[12px] text-[#a4a4a4] leading-tight">
                                 <p>Originals: {album.original_count}</p>
                                 <p>-Edit: {album.edited_count}</p>
                               </div>
