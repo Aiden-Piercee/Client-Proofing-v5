@@ -1,5 +1,41 @@
 import { AlbumDetails, LibraryAlbum, LibraryContext, LibraryImage, MetadataUpdatePayload } from "./types";
 
+const normalizeAsset = (url?: string | null) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = assertEnvApi();
+  const cleaned = url.startsWith("/") ? url.slice(1) : url;
+  return `${base}/${cleaned}`;
+};
+
+const normalizeImage = (
+  img: LibraryImage,
+  album?: LibraryAlbum,
+  fallbackAlbumId?: number
+): LibraryImage => {
+  const thumb =
+    img.thumb ||
+    (img as any).presets?.square?.url ||
+    (img as any).presets?.medium?.url ||
+    img.public_url ||
+    img.filename ||
+    null;
+  const medium = img.medium || (img as any).presets?.medium?.url || thumb;
+  const large = img.large || (img as any).presets?.large?.url || img.full || medium;
+  const full = img.full || (img as any).original || img.public_url || large;
+
+  return {
+    ...img,
+    thumb: normalizeAsset(thumb),
+    medium: normalizeAsset(medium),
+    large: normalizeAsset(large),
+    full: normalizeAsset(full),
+    public_url: normalizeAsset(img.public_url || null),
+    album_id: img.album_id ?? fallbackAlbumId ?? null,
+    album_title: img.album_title ?? album?.title ?? null,
+  };
+};
+
 function assertEnvApi() {
   const api = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_KOKEN_API_URL;
   if (!api) {
@@ -92,34 +128,75 @@ export async function fetchAlbumWithImages(id: number): Promise<AlbumDetails> {
 }
 
 export async function fetchGlobalContent(): Promise<LibraryImage[]> {
-  const albums = await fetchAlbums();
-  const validAlbums = albums
-    .map((album) => ({ ...album, numericId: Number(album.id) }))
-    .filter((album) => Number.isFinite(album.numericId));
-
-  const details = await Promise.all(
-    validAlbums.map(async (album) => {
-      try {
-        const detail = await fetchAlbumWithImages(Number(album.numericId));
-        return {
-          ...detail,
-          images: detail.images.map((img) => ({
-            ...img,
-            album_id: Number(album.numericId),
-            album_title: album.title ?? null,
-          })),
-        } as AlbumDetails;
-      } catch (err) {
-        console.error("Failed to load album", album.id, err);
-        return null;
-      }
-    })
+  const payload = await authorizedRequest<{ content?: LibraryImage[]; data?: LibraryImage[] } | LibraryImage[]>(
+    "/content"
   );
+  const list = Array.isArray(payload) ? payload : payload.content || payload.data || [];
+  return list.map((img) => normalizeImage(img));
+}
 
-  return details.reduce<LibraryImage[]>((acc, entry) => {
-    if (!entry) return acc;
-    return acc.concat(entry.images as LibraryImage[]);
-  }, []);
+function normalizeAsset(url?: string | null) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = assertEnvApi();
+  const cleaned = url.startsWith("/") ? url.slice(1) : url;
+  return `${base}/${cleaned}`;
+}
+
+function normalizeImage(img: LibraryImage, album?: LibraryAlbum, fallbackAlbumId?: number): LibraryImage {
+  const thumb =
+    img.thumb ||
+    (img as any).presets?.square?.url ||
+    (img as any).presets?.medium?.url ||
+    img.public_url ||
+    img.filename ||
+    null;
+  const medium = img.medium || (img as any).presets?.medium?.url || thumb;
+  const large = img.large || (img as any).presets?.large?.url || img.full || medium;
+  const full = img.full || (img as any).original || img.public_url || large;
+
+  return {
+    ...img,
+    thumb: normalizeAsset(thumb),
+    medium: normalizeAsset(medium),
+    large: normalizeAsset(large),
+    full: normalizeAsset(full),
+    public_url: normalizeAsset(img.public_url || null),
+    album_id: img.album_id ?? fallbackAlbumId ?? null,
+    album_title: img.album_title ?? album?.title ?? null,
+  };
+}
+
+function normalizeAsset(url?: string | null) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = assertEnvApi();
+  const cleaned = url.startsWith("/") ? url.slice(1) : url;
+  return `${base}/${cleaned}`;
+}
+
+function normalizeImage(img: LibraryImage, album?: LibraryAlbum, fallbackAlbumId?: number): LibraryImage {
+  const thumb =
+    img.thumb ||
+    (img as any).presets?.square?.url ||
+    (img as any).presets?.medium?.url ||
+    img.public_url ||
+    img.filename ||
+    null;
+  const medium = img.medium || (img as any).presets?.medium?.url || thumb;
+  const large = img.large || (img as any).presets?.large?.url || img.full || medium;
+  const full = img.full || (img as any).original || img.public_url || large;
+
+  return {
+    ...img,
+    thumb: normalizeAsset(thumb),
+    medium: normalizeAsset(medium),
+    large: normalizeAsset(large),
+    full: normalizeAsset(full),
+    public_url: normalizeAsset(img.public_url || null),
+    album_id: img.album_id ?? fallbackAlbumId ?? null,
+    album_title: img.album_title ?? album?.title ?? null,
+  };
 }
 
 function resolveWriteBase() {
