@@ -1,5 +1,41 @@
 import { AlbumDetails, LibraryAlbum, LibraryContext, LibraryImage, MetadataUpdatePayload } from "./types";
 
+const normalizeAsset = (url?: string | null) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  const base = assertEnvApi();
+  const cleaned = url.startsWith("/") ? url.slice(1) : url;
+  return `${base}/${cleaned}`;
+};
+
+const normalizeImage = (
+  img: LibraryImage,
+  album?: LibraryAlbum,
+  fallbackAlbumId?: number
+): LibraryImage => {
+  const thumb =
+    img.thumb ||
+    (img as any).presets?.square?.url ||
+    (img as any).presets?.medium?.url ||
+    img.public_url ||
+    img.filename ||
+    null;
+  const medium = img.medium || (img as any).presets?.medium?.url || thumb;
+  const large = img.large || (img as any).presets?.large?.url || img.full || medium;
+  const full = img.full || (img as any).original || img.public_url || large;
+
+  return {
+    ...img,
+    thumb: normalizeAsset(thumb),
+    medium: normalizeAsset(medium),
+    large: normalizeAsset(large),
+    full: normalizeAsset(full),
+    public_url: normalizeAsset(img.public_url || null),
+    album_id: img.album_id ?? fallbackAlbumId ?? null,
+    album_title: img.album_title ?? album?.title ?? null,
+  };
+};
+
 function assertEnvApi() {
   const api = process.env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_KOKEN_API_URL;
   if (!api) {
