@@ -5,5 +5,5 @@ interface AdminLayoutProps {
 }
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
-  return <div className="min-h-screen bg-gradient-to-br from-neutral-950 via-neutral-900 to-black text-white">{children}</div>;
+  return <div className="min-h-screen bg-[#1a1a1a] text-[#dddddd]">{children}</div>;
 }

@@ -60,15 +60,15 @@ export default function AdminAlbumsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <p className="text-xs uppercase tracking-[0.25em] text-neutral-400 mb-2">Library</p>
-        <h1 className="text-3xl font-semibold text-white">Albums</h1>
+        <p className="text-[11px] uppercase tracking-[0.2em] text-[#6f6f6f] mb-1">Library</p>
+        <h1 className="text-[18px] font-semibold text-white leading-tight">Albums</h1>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
         {albums.map((al) => (
           <Link href={`/admin/albums/${al.id}`} key={al.id} className="group">
-            <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden shadow-2xl shadow-black/30 transition duration-200 group-hover:-translate-y-1 group-hover:border-white/25">
-              <div className="relative h-44 bg-neutral-900">
+            <div className="bg-[#1f1f1f] border border-[rgba(255,255,255,0.05)] rounded-[6px] overflow-hidden shadow-[0_1px_2px_rgba(0,0,0,0.35)] transition duration-150 group-hover:-translate-y-0.5 group-hover:border-[rgba(200,139,75,0.45)]">
+              <div className="relative h-44 bg-[#0f0f0f]">
                 <img
                   src={al.cover_url || NEUTRAL_PLACEHOLDER}
                   srcSet={`${al.cover_url || NEUTRAL_PLACEHOLDER} 1x, ${al.cover_url || NEUTRAL_PLACEHOLDER} 2x`}
@@ -76,17 +76,17 @@ export default function AdminAlbumsPage() {
                   loading="lazy"
                   className="absolute inset-0 w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-                <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-xs font-semibold bg-white/15 text-white backdrop-blur">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+                <div className="absolute top-3 right-3 px-3 py-1 rounded-[4px] text-[12px] font-semibold bg-[rgba(0,0,0,0.6)] text-white border border-[rgba(255,255,255,0.08)]">
                   {al.image_count ?? 0} images
                 </div>
               </div>
 
-              <div className="p-4 space-y-2">
-                <h2 className="text-lg font-semibold text-white leading-tight">
+              <div className="p-3 space-y-1.5">
+                <h2 className="text-[15px] font-semibold text-white leading-tight">
                   {al.title || "Untitled Album"}
                 </h2>
-                <p className="text-sm text-neutral-400">Album ID #{al.id}</p>
+                <p className="text-[13px] text-[#a4a4a4]">Album ID #{al.id}</p>
               </div>
             </div>
           </Link>

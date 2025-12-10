@@ -35,7 +35,7 @@ export function ThumbnailGrid({
   const visibleImages = useMemo(() => images.slice(0, visibleCount), [images, visibleCount]);
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-white/10 bg-neutral-900/70 p-4 shadow-xl shadow-black/30 min-h-[520px]">
+    <div className="flex flex-col gap-3 rounded-[6px] border border-[rgba(255,255,255,0.05)] bg-[#202020] p-4 shadow-[0_1px_2px_rgba(0,0,0,0.35)] min-h-[520px]">
       {isLoading && (
         <p className="text-sm text-neutral-500">Loading content…</p>
       )}
@@ -55,32 +55,34 @@ export function ThumbnailGrid({
               key={img.id}
               onClick={() => onSelect(img.id)}
               onDoubleClick={() => onDoubleClick?.(img)}
-              className={`group relative overflow-hidden rounded-lg border transition focus:outline-none ${
+              className={`group relative overflow-hidden rounded-[4px] border transition duration-125 focus:outline-none ${
                 selected
-                  ? "border-amber-400 shadow-[0_0_0_2px_rgba(227,154,76,0.45)]"
-                  : "border-white/10 hover:border-white/30"
-              }`}
+                  ? "border-[#c88b4b] shadow-[0_0_0_2px_rgba(200,139,75,0.45)]"
+                  : "border-[rgba(255,255,255,0.08)] hover:border-[rgba(255,255,255,0.12)]"
+              } ${selected ? "shadow-[0_4px_10px_rgba(0,0,0,0.35)]" : "hover:translate-y-[-2px] hover:shadow-[0_4px_8px_rgba(0,0,0,0.25)]"}`}
             >
-              <div className="aspect-[4/3] bg-neutral-800">
+              <div className="aspect-[4/3] bg-[#1a1a1a]">
                 <img
                   src={img.medium || img.thumb || img.full || "/placeholder.svg"}
                   srcSet={`${img.medium || img.thumb || ""} 1x, ${img.large || img.medium || img.thumb || ""} 2x`}
                   alt={img.title || img.filename || `Image #${img.id}`}
-                  className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.02] group-hover:brightness-110"
+                  className="h-full w-full object-cover transition duration-125 group-hover:scale-[1.01] group-hover:brightness-110"
                 />
               </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition" />
-              <div className="absolute left-0 right-0 bottom-0 px-3 py-2 flex items-center justify-between text-xs text-white">
-                <span className="truncate" title={img.title || img.filename || undefined}>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/25 to-transparent opacity-0 group-hover:opacity-100 transition duration-125" />
+              <div className="absolute left-0 right-0 bottom-0 px-3 py-2 flex items-center justify-between text-[12px] text-white">
+                <span className="truncate leading-tight" title={img.title || img.filename || undefined}>
                   {img.title || img.filename || `Image #${img.id}`}
                 </span>
                 {img.favorite ? (
                   <span className="text-amber-300">★</span>
                 ) : img.hasEditedReplacement ? (
-                  <span className="rounded-full bg-amber-500/70 px-2 py-0.5 text-[10px] uppercase">Edited</span>
+                  <span className="rounded-[4px] border border-[rgba(255,255,255,0.08)] bg-[rgba(200,139,75,0.15)] px-2 py-0.5 text-[10px] uppercase text-[#f2d3a4]">
+                    Edited
+                  </span>
                 ) : null}
               </div>
-              <div className="bg-neutral-900/90 text-[11px] text-neutral-300 py-2 text-center border-t border-white/5">
+              <div className="bg-[#1a1a1a]/90 text-[11px] text-[#a4a4a4] py-2 text-center border-t border-[rgba(255,255,255,0.05)]">
                 {formatDate(img.captured_on || img.uploaded_on || img.modified_on)}
               </div>
             </button>
@@ -90,7 +92,7 @@ export function ThumbnailGrid({
       {visibleImages.length < images.length && (
         <button
           onClick={onLoadMore}
-          className="mx-auto mt-2 w-40 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10 transition"
+          className="mx-auto mt-2 w-40 rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1f1f1f] px-3 py-2 text-[13px] text-white hover:bg-[#232323] transition duration-125"
         >
           Load more
         </button>

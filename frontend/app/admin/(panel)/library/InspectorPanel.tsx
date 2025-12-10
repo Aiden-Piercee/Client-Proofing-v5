@@ -61,15 +61,15 @@ export function InspectorPanel({
 
   if (collapsed) {
     return (
-      <aside className="rounded-2xl border border-white/10 bg-neutral-900/70 p-4 text-sm text-neutral-300 shadow-lg shadow-black/30">
+      <aside className="rounded-[6px] border border-[rgba(255,255,255,0.05)] bg-[#202020] p-3 text-[13px] text-[#a4a4a4] shadow-[0_1px_2px_rgba(0,0,0,0.35)]">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">Inspector</p>
-            <p className="text-white font-semibold">Collapsed</p>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-[#6f6f6f]">Inspector</p>
+            <p className="text-white font-semibold leading-tight">Collapsed</p>
           </div>
           <button
             onClick={onToggle}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white hover:bg-white/10 transition"
+            className="rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1f1f1f] px-3 py-2 text-[12px] text-white hover:bg-[#232323] transition duration-125"
           >
             Expand
           </button>
@@ -79,15 +79,15 @@ export function InspectorPanel({
   }
 
   return (
-    <aside className="rounded-2xl border border-white/10 bg-neutral-900/70 p-4 space-y-4 text-sm text-neutral-300 shadow-xl shadow-black/30 max-h-[calc(100vh-220px)] overflow-y-auto">
+    <aside className="rounded-[6px] border border-[rgba(255,255,255,0.05)] bg-[#202020] p-3 space-y-4 text-[13px] text-[#a4a4a4] shadow-[0_1px_2px_rgba(0,0,0,0.35)] max-h-[calc(100vh-220px)] overflow-y-auto">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">Inspector</p>
-          <h3 className="text-lg font-semibold text-white">Selected item</h3>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-[#6f6f6f]">Inspector</p>
+          <h3 className="text-[15px] font-semibold text-white leading-tight">Selected item</h3>
         </div>
         <button
           onClick={onToggle}
-          className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-white hover:bg-white/10 transition"
+          className="rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1f1f1f] px-3 py-2 text-[12px] text-white hover:bg-[#232323] transition duration-125"
         >
           Collapse
         </button>
@@ -97,7 +97,7 @@ export function InspectorPanel({
 
       {image && (
         <div className="space-y-4">
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-neutral-800">
+          <div className="overflow-hidden rounded-[4px] border border-[rgba(255,255,255,0.08)] bg-[#1a1a1a] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <img
               src={image.large || image.medium || image.thumb || image.full || "/placeholder.svg"}
               alt={image.title || image.filename || "Selected image"}
@@ -105,7 +105,7 @@ export function InspectorPanel({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs text-neutral-400">
+          <div className="grid grid-cols-2 gap-2 text-[12px] text-[#6f6f6f]">
             <InfoBlock label="Filename" value={image.filename || "—"} />
             <InfoBlock label="Dimensions" value={image.dimensions || "—"} />
             <InfoBlock label="ID" value={`#${image.id}`} />
@@ -114,25 +114,25 @@ export function InspectorPanel({
 
           <div className="space-y-3">
             <label className="space-y-1 block">
-              <span className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Title</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Title</span>
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-neutral-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="w-full h-9 rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1a1a1a] px-3 text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[rgba(200,139,75,0.55)]"
               />
             </label>
             <label className="space-y-1 block">
-              <span className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Caption</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Caption</span>
               <textarea
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-neutral-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="w-full rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1a1a1a] px-3 py-2 text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[rgba(200,139,75,0.55)]"
                 rows={3}
               />
             </label>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs text-neutral-400">
+          <div className="grid grid-cols-2 gap-2 text-[12px] text-[#6f6f6f]">
             <InfoBlock label="Visibility" value={visibility || "public"} />
             <InfoBlock label="License" value={license || "—"} />
             <InfoBlock label="Site" value={image.site || "—"} />
@@ -141,41 +141,41 @@ export function InspectorPanel({
 
           <div className="space-y-2">
             <label className="space-y-1 block">
-              <span className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Categories</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Categories</span>
               <input
                 value={categories}
                 onChange={(e) => setCategories(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-neutral-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="w-full h-9 rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1a1a1a] px-3 text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[rgba(200,139,75,0.55)]"
                 placeholder="Comma separated"
               />
             </label>
             <label className="space-y-1 block">
-              <span className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Tags</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Tags</span>
               <input
                 value={tags}
                 onChange={(e) => setTags(e.target.value)}
-                className="w-full rounded-lg border border-white/10 bg-neutral-800 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="w-full h-9 rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1a1a1a] px-3 text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[rgba(200,139,75,0.55)]"
                 placeholder="Comma separated"
               />
             </label>
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-neutral-400">
+          <div className="flex items-center gap-3 text-[12px] text-[#6f6f6f]">
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={download}
                 onChange={(e) => setDownload(e.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-neutral-800 text-amber-400 focus:ring-amber-500/60"
+                className="h-4 w-4 rounded border-[rgba(255,255,255,0.15)] bg-[#1a1a1a] text-[#c88b4b] focus:ring-[rgba(200,139,75,0.55)]"
               />
               <span>Allow download</span>
             </label>
             <label className="flex items-center gap-2">
-              <span className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Visibility</span>
+              <span className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Visibility</span>
               <select
                 value={visibility}
                 onChange={(e) => setVisibility(e.target.value)}
-                className="rounded border border-white/10 bg-neutral-800 px-2 py-1 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+                className="h-8 rounded-[4px] border border-[rgba(255,255,255,0.08)] bg-[#1a1a1a] px-2 text-[12px] text-white focus:outline-none focus:ring-1 focus:ring-[rgba(200,139,75,0.55)]"
               >
                 <option value="public">Public</option>
                 <option value="unlisted">Unlisted</option>
@@ -184,25 +184,25 @@ export function InspectorPanel({
             </label>
           </div>
 
-          <div className="rounded-xl border border-white/10 bg-neutral-800/70 p-3 space-y-1 text-xs">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">Direct link</p>
+          <div className="rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1a1a1a]/80 p-3 space-y-1 text-[12px]">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">Direct link</p>
             <div className="flex items-center gap-2">
               <input
                 readOnly
                 value={image.public_url || "Unavailable"}
-                className="flex-1 rounded-lg border border-white/10 bg-neutral-900 px-2 py-1 text-[11px] text-white"
+                className="flex-1 h-8 rounded-[4px] border border-[rgba(255,255,255,0.08)] bg-[#101010] px-2 text-[11px] text-white"
               />
               <button
                 onClick={() => navigator.clipboard.writeText(image.public_url || "")}
-                className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white hover:bg-white/10 transition"
+                className="rounded-[4px] border border-[rgba(255,255,255,0.08)] bg-[#1f1f1f] px-2 py-1 text-[11px] text-white hover:bg-[#232323] transition duration-125"
               >
                 Copy
               </button>
             </div>
           </div>
 
-          <div className="space-y-2 text-xs text-neutral-400">
-            <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-500">History</p>
+          <div className="space-y-2 text-[12px] text-[#6f6f6f]">
+            <p className="text-[11px] uppercase tracking-[0.18em] text-[#6f6f6f]">History</p>
             <div className="grid grid-cols-2 gap-2">
               <InfoBlock label="Published" value={formatTimestamp(image.captured_on)} />
               <InfoBlock label="Captured" value={formatTimestamp(image.captured_on)} />
@@ -211,8 +211,8 @@ export function InspectorPanel({
             </div>
           </div>
 
-          {error && <p className="text-sm text-red-300">{error}</p>}
-          {message && <p className="text-sm text-emerald-300">{message}</p>}
+          {error && <p className="text-[13px] text-red-300">{error}</p>}
+          {message && <p className="text-[13px] text-emerald-300">{message}</p>}
 
           <div className="flex items-center justify-between gap-2">
             <button
@@ -236,7 +236,7 @@ export function InspectorPanel({
                 setMessage("Metadata saved to Koken.");
               }}
               disabled={!image || saving}
-              className="flex-1 rounded-lg border border-amber-500/40 bg-amber-600/40 px-4 py-2 text-sm font-semibold text-white shadow-inner shadow-amber-900/40 hover:bg-amber-500/50 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="flex-1 rounded-[5px] border border-[rgba(200,139,75,0.55)] bg-[rgba(200,139,75,0.25)] px-4 py-2 text-[13px] font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] hover:bg-[rgba(200,139,75,0.35)] transition duration-125 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {saving ? "Saving…" : "Save"}
             </button>
@@ -252,7 +252,7 @@ export function InspectorPanel({
                 setMessage(null);
               }}
               disabled={!image || saving}
-              className="rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm text-white hover:bg-white/10 transition disabled:opacity-60 disabled:cursor-not-allowed"
+              className="rounded-[5px] border border-[rgba(255,255,255,0.08)] bg-[#1f1f1f] px-4 py-2 text-[13px] text-white hover:bg-[#232323] transition duration-125 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               Reset
             </button>
@@ -265,9 +265,9 @@ export function InspectorPanel({
 
 function InfoBlock({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-neutral-900 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-[0.25em] text-neutral-500">{label}</p>
-      <p className="text-white text-xs truncate">{value || "—"}</p>
+    <div className="rounded-[4px] border border-[rgba(255,255,255,0.08)] bg-[#121212] px-3 py-2">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-[#6f6f6f]">{label}</p>
+      <p className="text-white text-[12px] truncate leading-tight">{value || "—"}</p>
     </div>
   );
 }
