@@ -1,88 +1,88 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-
-interface LibraryAlbum {
-  id: number | string;
-  title: string | null;
-  image_count?: number | null;
-  visibility?: number | string;
-  created_on?: number | string;
-  cover_url?: string | null;
-}
-
-interface LibraryImage {
-  id: number;
-  title: string | null;
-  thumb?: string | null;
-  medium?: string | null;
-  large?: string | null;
-  full?: string | null;
-  filename?: string | null;
-  public_url?: string | null;
-  hasEditedReplacement?: boolean;
-  isEditedReplacement?: boolean;
-  original_image_id?: number | null;
-}
-
-interface AlbumDetails extends LibraryAlbum {
-  images: LibraryImage[];
-}
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { InspectorPanel } from "./InspectorPanel";
+import { Sidebar } from "./Sidebar";
+import { ThumbnailGrid } from "./ThumbnailGrid";
+import { Toolbar } from "./Toolbar";
+import {
+  fetchAlbumWithImages,
+  fetchAlbums,
+  fetchGlobalContent,
+  updateContentCategories,
+  updateContentMetadata,
+  updateContentTags,
+} from "./kokenClient";
+import { AlbumDetails, LibraryAlbum, LibraryContext, LibraryImage } from "./types";
 
 const PLACEHOLDER =
   "data:image/svg+xml;utf8," +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="120" viewBox="0 0 180 120" fill="none"><rect width="180" height="120" rx="12" fill="#111827"/><path d="M48 86l22-28 18 23 14-18 14 23H48z" fill="#1f2937"/><circle cx="74" cy="46" r="10" fill="#27303f"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="180" viewBox="0 0 240 180" fill="none"><rect width="240" height="180" rx="14" fill="#1f1f1f"/><path d="M60 132l32-40 26 34 18-24 24 38H60z" fill="#2b2b2b"/><circle cx="102" cy="70" r="14" fill="#333"/></svg>'
   );
-
-function formatTimestamp(value?: number | string | null) {
-  if (value === null || value === undefined) return "";
-  const numeric = typeof value === "string" ? Number(value) : value;
-  if (!numeric) return "";
-  const date = new Date(numeric * 1000);
-  return date.toLocaleString();
-}
 
 function parseAlbumId(id: number | string | null | undefined) {
   const numeric = typeof id === "string" ? Number(id) : id;
   return Number.isFinite(numeric) ? (numeric as number) : null;
 }
 
+function normalizeVisibility(value?: number | string) {
+  if (value === null || value === undefined) return "public";
+  const numeric = typeof value === "string" ? Number(value) : value;
+  if (numeric === 2) return "private";
+  if (numeric === 1) return "unlisted";
+  return "public";
+}
+
+function timestampToYear(value?: number | string | null) {
+  if (value === null || value === undefined) return null;
+  const numeric = typeof value === "string" ? Number(value) : value;
+  if (!numeric) return null;
+  return new Date(numeric * 1000).getFullYear();
+}
+
+const RECENT_DAYS = 30;
+
 export default function LibraryPage() {
   const [albums, setAlbums] = useState<LibraryAlbum[]>([]);
-  const [selectedAlbumId, setSelectedAlbumId] = useState<number | null>(null);
-  const [albumDetails, setAlbumDetails] = useState<AlbumDetails | null>(null);
+  const [albumCache, setAlbumCache] = useState<Record<number, AlbumDetails>>({});
+  const [globalImages, setGlobalImages] = useState<LibraryImage[]>([]);
+  const [context, setContext] = useState<LibraryContext>({ scope: "all", filter: "content" });
   const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
   const [loadingAlbums, setLoadingAlbums] = useState(true);
-  const [loadingImages, setLoadingImages] = useState(false);
+  const [loadingContent, setLoadingContent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("captured-desc");
+  const [visibleCount, setVisibleCount] = useState(24);
+  const [columnEstimate, setColumnEstimate] = useState(5);
+  const [inspectorCollapsed, setInspectorCollapsed] = useState(false);
+  const [previewImage, setPreviewImage] = useState<LibraryImage | null>(null);
+  const [savingMeta, setSavingMeta] = useState(false);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
 
   useEffect(() => {
-    async function fetchAlbums() {
+    const handleResize = () => {
+      const estimate = Math.max(4, Math.min(8, Math.floor(window.innerWidth / 220)));
+      setColumnEstimate(estimate);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  useEffect(() => {
+    async function loadAlbums() {
+      setLoadingAlbums(true);
+      setError(null);
       try {
-        const API = process.env.NEXT_PUBLIC_API_URL;
-        if (!API) throw new Error("NEXT_PUBLIC_API_URL missing");
-
-        const token = localStorage.getItem("admin_token");
-        if (!token) throw new Error("Missing admin token");
-
-        const res = await fetch(`${API}/admin/albums`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) throw new Error("Unable to load albums from Koken");
-        const data: LibraryAlbum[] = await res.json();
-        const firstNumericAlbum = data.find((album) => parseAlbumId(album.id) !== null);
-
+        const data = await fetchAlbums();
         setAlbums(data);
-
-        if (firstNumericAlbum) {
-          setSelectedAlbumId(parseAlbumId(firstNumericAlbum.id));
-        } else {
-          setError("No albums with a valid numeric id were returned from Koken.");
+        if (!context.albumId) {
+          const first = data.find((album) => parseAlbumId(album.id) !== null);
+          if (first) {
+            setContext((prev) => ({ ...prev, albumId: parseAlbumId(first.id) }));
+          }
         }
       } catch (err: any) {
         console.error(err);
@@ -91,313 +91,348 @@ export default function LibraryPage() {
         setLoadingAlbums(false);
       }
     }
-
-    fetchAlbums();
+    loadAlbums();
   }, []);
 
   useEffect(() => {
-    async function fetchAlbumDetails() {
-      if (!selectedAlbumId) return;
+    async function loadGlobalContent() {
+      if (globalImages.length > 0 || loadingContent || context.scope !== "all") return;
+      setLoadingContent(true);
+      setError(null);
       try {
-        setLoadingImages(true);
-        setError(null);
-        const API = process.env.NEXT_PUBLIC_API_URL;
-        if (!API) throw new Error("NEXT_PUBLIC_API_URL missing");
-        const token = localStorage.getItem("admin_token");
-        if (!token) throw new Error("Missing admin token");
-
-        const res = await fetch(`${API}/admin/albums/${selectedAlbumId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!res.ok) throw new Error("Unable to load album detail");
-        const data: AlbumDetails = await res.json();
-        setAlbumDetails(data);
-        if (data.images?.length) {
-          setSelectedImageId(data.images[0].id);
-        }
+        const images = await fetchGlobalContent();
+        setGlobalImages(images);
       } catch (err: any) {
         console.error(err);
         setError(err.message);
       } finally {
-        setLoadingImages(false);
+        setLoadingContent(false);
       }
     }
+    loadGlobalContent();
+  }, [context.scope, globalImages.length, loadingContent]);
 
-    fetchAlbumDetails();
-  }, [selectedAlbumId]);
+  const fetchAlbumIfNeeded = useCallback(
+    async (albumId: number) => {
+      if (albumCache[albumId]) return albumCache[albumId];
+      setLoadingContent(true);
+      setError(null);
+      try {
+        const detail = await fetchAlbumWithImages(albumId);
+        const normalized: AlbumDetails = {
+          ...detail,
+          images: detail.images.map((img) => ({
+            ...img,
+            album_id: albumId,
+            album_title: detail.title ?? null,
+            thumb: img.thumb || PLACEHOLDER,
+          })),
+        };
+        setAlbumCache((prev) => ({ ...prev, [albumId]: normalized }));
+        return normalized;
+      } catch (err: any) {
+        console.error(err);
+        setError(err.message);
+        return null;
+      } finally {
+        setLoadingContent(false);
+      }
+    },
+    [albumCache]
+  );
 
-  const selectedImage = useMemo(() => {
-    if (!albumDetails || !albumDetails.images) return null;
-    return albumDetails.images.find((img) => img.id === selectedImageId) ?? albumDetails.images[0] ?? null;
-  }, [albumDetails, selectedImageId]);
+  useEffect(() => {
+    if (context.scope === "album" && context.albumId) {
+      fetchAlbumIfNeeded(context.albumId);
+    }
+  }, [context.scope, context.albumId, fetchAlbumIfNeeded]);
 
-  const filteredImages = useMemo(() => {
-    if (!albumDetails?.images) return [] as LibraryImage[];
-    if (!filter.trim()) return albumDetails.images;
-    const lowered = filter.toLowerCase();
-    return albumDetails.images.filter((img) => {
-      const title = img.title || img.filename || "";
-      return title.toLowerCase().includes(lowered);
+  useEffect(() => {
+    const years = new Set<number>();
+    globalImages.forEach((img) => {
+      const year = timestampToYear(img.captured_on || img.uploaded_on || img.modified_on);
+      if (year) years.add(year);
     });
-  }, [albumDetails, filter]);
+    const yearList: number[] = [];
+    years.forEach((value) => yearList.push(value));
+    setAvailableYears(yearList.sort((a, b) => b - a));
+  }, [globalImages]);
 
-  const totalImages = filteredImages.length;
+  const activeImages = useMemo(() => {
+    let pool: LibraryImage[] = [];
+    if (context.scope === "album" && context.albumId && albumCache[context.albumId]) {
+      pool = albumCache[context.albumId].images;
+    } else {
+      pool = globalImages;
+    }
+
+    let filtered = [...pool];
+
+    if (context.filter === "favorites") {
+      filtered = filtered.filter((img) => !!img.favorite);
+    }
+    if (context.filter === "featured") {
+      filtered = filtered.filter((img) => img.hasEditedReplacement || !!img.favorite);
+    }
+    if (context.filter === "quick") {
+      filtered = filtered.filter((img) => img.print || img.state === "pick" || img.hasEditedReplacement);
+    }
+    if (context.filter === "unlisted") {
+      filtered = filtered.filter((img) => normalizeVisibility(img.visibility) === "unlisted");
+    }
+    if (context.filter === "private") {
+      filtered = filtered.filter((img) => normalizeVisibility(img.visibility) === "private");
+    }
+    if (context.filter === "lastImport") {
+      const cutoff = Date.now() - RECENT_DAYS * 24 * 60 * 60 * 1000;
+      filtered = filtered.filter((img) => {
+        const ts = (img.uploaded_on || img.modified_on || img.captured_on) ?? null;
+        const numeric = typeof ts === "string" ? Number(ts) : ts;
+        if (!numeric) return false;
+        return numeric * 1000 >= cutoff;
+      });
+    }
+    if (context.filter === "year" && context.year) {
+      filtered = filtered.filter((img) => timestampToYear(img.captured_on || img.uploaded_on || img.modified_on) === context.year);
+    }
+
+    if (search.trim()) {
+      const lowered = search.toLowerCase();
+      filtered = filtered.filter((img) => {
+        const title = img.title || img.filename || "";
+        const tagString = (img.tags ?? []).join(" ");
+        const categoryString = (img.categories ?? []).join(" ");
+        return (
+          title.toLowerCase().includes(lowered) ||
+          tagString.toLowerCase().includes(lowered) ||
+          categoryString.toLowerCase().includes(lowered)
+        );
+      });
+    }
+
+    filtered.sort((a, b) => {
+      switch (sort) {
+        case "captured-asc":
+          return (a.captured_on || 0) > (b.captured_on || 0) ? 1 : -1;
+        case "captured-desc":
+          return (a.captured_on || 0) < (b.captured_on || 0) ? 1 : -1;
+        case "name-asc":
+          return (a.title || a.filename || "").localeCompare(b.title || b.filename || "");
+        case "name-desc":
+          return (b.title || b.filename || "").localeCompare(a.title || a.filename || "");
+        case "id-asc":
+          return a.id - b.id;
+        case "id-desc":
+          return b.id - a.id;
+        default:
+          return 0;
+      }
+    });
+
+    return filtered.map((img) => ({
+      ...img,
+      thumb: img.thumb || PLACEHOLDER,
+      medium: img.medium || img.thumb || PLACEHOLDER,
+    }));
+  }, [albumCache, context, globalImages, search, sort]);
+
+  useEffect(() => {
+    setVisibleCount(24);
+    if (!activeImages.some((img) => img.id === selectedImageId)) {
+      setSelectedImageId(activeImages[0]?.id ?? null);
+    }
+  }, [activeImages, selectedImageId]);
+
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (!activeImages.length || !selectedImageId) return;
+      const index = Math.max(0, activeImages.findIndex((img) => img.id === selectedImageId));
+      let nextIndex = index;
+      if (event.key === "ArrowRight") nextIndex = Math.min(activeImages.length - 1, index + 1);
+      if (event.key === "ArrowLeft") nextIndex = Math.max(0, index - 1);
+      if (event.key === "ArrowDown") nextIndex = Math.min(activeImages.length - 1, index + columnEstimate);
+      if (event.key === "ArrowUp") nextIndex = Math.max(0, index - columnEstimate);
+      if (nextIndex !== index) {
+        event.preventDefault();
+        setSelectedImageId(activeImages[nextIndex].id);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [activeImages, selectedImageId, columnEstimate]);
+
+  const selectedImage = useMemo(
+    () => activeImages.find((img) => img.id === selectedImageId) ?? null,
+    [activeImages, selectedImageId]
+  );
+
+  const handleSelectFilter = (filter: LibraryContext["filter"], year?: number | null) => {
+    setContext({ scope: "all", filter, year: year ?? null });
+    setVisibleCount(24);
+  };
+
+  const handleSelectAlbum = (albumId: number, label?: string) => {
+    setContext({ scope: "album", filter: "content", albumId, label: label ?? undefined });
+    setVisibleCount(24);
+  };
+
+  const handleLoadMore = () => setVisibleCount((prev) => prev + 24);
+
+  const handleSaveMetadata = async (payload: {
+    title: string;
+    caption: string;
+    license: string;
+    visibility: string;
+    categories: string[];
+    tags: string[];
+    download: boolean;
+  }) => {
+    if (!selectedImage) return;
+    setSavingMeta(true);
+    setError(null);
+    try {
+      await updateContentMetadata(selectedImage.id, {
+        title: payload.title,
+        caption: payload.caption,
+        license: payload.license,
+        visibility: payload.visibility,
+        download: payload.download,
+      });
+      await updateContentCategories(selectedImage.id, payload.categories);
+      await updateContentTags(selectedImage.id, payload.tags);
+
+      const applyUpdate = (images: LibraryImage[]) =>
+        images.map((img) =>
+          img.id === selectedImage.id
+            ? {
+                ...img,
+                title: payload.title,
+                caption: payload.caption,
+                license: payload.license,
+                visibility: payload.visibility,
+                categories: payload.categories,
+                tags: payload.tags,
+                download: payload.download,
+              }
+            : img
+        );
+
+      if (context.scope === "album" && context.albumId) {
+        setAlbumCache((prev) => {
+          const existing = prev[context.albumId!];
+          if (!existing) return prev;
+          return {
+            ...prev,
+            [context.albumId!]: { ...existing, images: applyUpdate(existing.images) },
+          };
+        });
+      }
+      setGlobalImages((prev) => applyUpdate(prev));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message);
+    } finally {
+      setSavingMeta(false);
+    }
+  };
+
+  const refreshContent = async () => {
+    setGlobalImages([]);
+    setAlbumCache({});
+    setSelectedImageId(null);
+    setVisibleCount(24);
+    setContext((prev) => ({ ...prev }));
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.25em] text-neutral-400">Library</p>
-          <h1 className="text-3xl font-semibold text-white">Image Library</h1>
-          <p className="text-neutral-400 text-sm mt-1">Live feed from the Koken API, wrapped in a modern admin shell.</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-neutral-500">Koken-style Library</p>
+          <h1 className="text-3xl font-semibold text-white">Content library</h1>
+          <p className="text-neutral-400 text-sm mt-1">
+            Modernised inspector + navigation that mirrors Koken’s mental model with three persistent panels.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter images"
-            className="h-10 w-48 rounded-lg bg-white/5 border border-white/10 px-3 text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/20"
+        <div className="flex items-center gap-3 text-sm text-neutral-300">
+          <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.15)]" />
+          Live Koken API
+        </div>
+      </div>
+
+      {error && <p className="rounded-lg border border-red-500/40 bg-red-900/30 px-4 py-2 text-sm text-red-200">{error}</p>}
+
+      <Toolbar
+        context={context}
+        total={activeImages.length}
+        search={search}
+        sort={sort}
+        onSearchChange={setSearch}
+        onSortChange={setSort}
+        onRefresh={refreshContent}
+      />
+
+      <div className="grid grid-cols-12 gap-4 lg:gap-6">
+        <div className="col-span-12 lg:col-span-3">
+          <Sidebar
+            albums={albums}
+            activeContext={context}
+            onSelectFilter={handleSelectFilter}
+            onSelectAlbum={handleSelectAlbum}
+            loadingAlbums={loadingAlbums}
+            years={availableYears}
           />
-          <button className="h-10 px-4 rounded-lg border border-white/10 text-sm text-white bg-white/5 hover:bg-white/10 transition">
-            Upload
-          </button>
-          <button className="h-10 px-4 rounded-lg border border-white/10 text-sm text-white bg-white/5 hover:bg-white/10 transition">
-            Download
-          </button>
+        </div>
+
+        <div className="col-span-12 lg:col-span-6 space-y-3">
+          <ThumbnailGrid
+            images={activeImages}
+            selectedId={selectedImageId}
+            onSelect={setSelectedImageId}
+            onDoubleClick={(img) => setPreviewImage(img)}
+            isLoading={loadingContent}
+            visibleCount={visibleCount}
+            onLoadMore={handleLoadMore}
+            columnEstimate={columnEstimate}
+          />
+        </div>
+
+        <div className="col-span-12 lg:col-span-3">
+          <InspectorPanel
+            image={selectedImage}
+            albumTitle={context.scope === "album" && context.albumId ? albumCache[context.albumId]?.title : undefined}
+            collapsed={inspectorCollapsed}
+            onToggle={() => setInspectorCollapsed((prev) => !prev)}
+            onSave={handleSaveMetadata}
+            saving={savingMeta}
+            error={error}
+          />
         </div>
       </div>
 
-      {error && <p className="text-red-300 bg-red-900/30 border border-red-500/40 rounded-lg px-3 py-2">{error}</p>}
-
-      <div className="grid grid-cols-12 gap-4">
-        <aside className="col-span-12 lg:col-span-3 space-y-4">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 shadow-xl shadow-black/30">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.25em] text-neutral-400">Library</p>
-                <h2 className="text-lg font-semibold text-white">Collections</h2>
-              </div>
-              <span className="px-2 py-1 text-[11px] rounded-md bg-white/10 text-white border border-white/10">
-                {albums.length} albums
-              </span>
+      {previewImage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-6">
+          <div className="relative w-full max-w-5xl rounded-2xl border border-white/10 bg-neutral-950 shadow-2xl shadow-black/50">
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute right-3 top-3 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-white hover:bg-white/20"
+            >
+              Close
+            </button>
+            <div className="aspect-[16/9] w-full overflow-hidden rounded-2xl">
+              <img
+                src={previewImage.full || previewImage.large || previewImage.medium || previewImage.thumb || PLACEHOLDER}
+                alt={previewImage.title || previewImage.filename || "Preview"}
+                className="h-full w-full object-contain bg-neutral-900"
+              />
             </div>
-            <div className="space-y-1">
-              {["All content", "Favorites", "Featured", "Categories", "Timeline", "Stars"].map((item) => (
-                <div
-                  key={item}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition"
-                >
-                  <span>{item}</span>
-                  <span className="text-neutral-500">&rsaquo;</span>
-                </div>
-              ))}
+            <div className="p-4 text-sm text-neutral-300">
+              <p className="text-white text-lg font-semibold">{previewImage.title || previewImage.filename || "Image"}</p>
+              <p className="text-neutral-500">Double click any thumbnail to open full preview.</p>
             </div>
           </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 shadow-xl shadow-black/30">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.25em] text-neutral-400">Albums</p>
-                <h2 className="text-lg font-semibold text-white">Koken library</h2>
-              </div>
-              <button className="px-2 py-1 text-[11px] rounded-md bg-white/10 text-white border border-white/10 hover:bg-white/20 transition">
-                New album
-              </button>
-            </div>
-            <div className="space-y-1 max-h-[420px] overflow-auto pr-1">
-              {loadingAlbums && <p className="text-neutral-400 text-sm">Loading albums…</p>}
-              {!loadingAlbums && albums.length === 0 && (
-                <p className="text-neutral-400 text-sm">No albums found.</p>
-              )}
-              {albums.map((album) => {
-                const active = parseAlbumId(album.id) === selectedAlbumId;
-                return (
-                  <button
-                    key={album.id}
-                    onClick={() => {
-                      const parsed = parseAlbumId(album.id);
-                      if (parsed === null) {
-                        setError("Album id is not numeric, unable to load details.");
-                        return;
-                      }
-
-                      setError(null);
-                      setSelectedAlbumId(parsed);
-                    }}
-                    className={`w-full flex items-start gap-3 rounded-lg px-3 py-2 text-left transition border ${
-                      active
-                        ? "bg-white/10 border-white/20 text-white"
-                        : "border-transparent text-neutral-300 hover:border-white/10 hover:text-white"
-                    }`}
-                  >
-                    <div className="h-11 w-16 rounded-md overflow-hidden bg-neutral-900 border border-white/10 relative">
-                      <img
-                        src={album.cover_url || PLACEHOLDER}
-                        alt={album.title || "Album cover"}
-                        className="absolute inset-0 w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">{album.title || "Untitled album"}</p>
-                      <p className="text-xs text-neutral-400">{album.image_count ?? "–"} items</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 shadow-xl shadow-black/30">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="text-sm font-semibold text-white">Data sets</h3>
-              <button className="text-xs text-neutral-400 hover:text-white">Manage</button>
-            </div>
-            <div className="space-y-1">
-              {["albums", "categories", "content", "custompages", "tags"].map((item) => (
-                <div
-                  key={item}
-                  className="flex items-center justify-between px-3 py-2 rounded-lg text-sm text-neutral-300 hover:bg-white/5 hover:text-white transition"
-                >
-                  <span className="capitalize">{item}</span>
-                  <span className="text-neutral-500">&rsaquo;</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
-
-        <section className="col-span-12 lg:col-span-6 space-y-3">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 shadow-xl shadow-black/30">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.25em] text-neutral-400">Content</p>
-                <h2 className="text-lg font-semibold text-white">
-                  {albumDetails?.title || "Select an album"}
-                </h2>
-                <p className="text-xs text-neutral-400">{totalImages} items</p>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-neutral-300">
-                <span className="px-2 py-1 rounded-lg border border-white/10 bg-white/5">Grid</span>
-                <span className="px-2 py-1 rounded-lg border border-white/10 bg-black/40 text-neutral-500">List</span>
-                <span className="px-2 py-1 rounded-lg border border-white/10 bg-black/40 text-neutral-500">Details</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 shadow-xl shadow-black/30 min-h-[480px]">
-            {loadingImages && <p className="text-neutral-400 text-sm">Loading images…</p>}
-            {!loadingImages && filteredImages.length === 0 && (
-              <p className="text-neutral-400 text-sm">No images for this album.</p>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredImages.map((img) => {
-                const selected = img.id === selectedImage?.id;
-                return (
-                  <button
-                    key={img.id}
-                    onClick={() => setSelectedImageId(img.id)}
-                    className={`group relative rounded-xl overflow-hidden border transition focus:outline-none ${
-                      selected
-                        ? "border-amber-400 shadow-[0_0_0_3px_rgba(251,191,36,0.25)]"
-                        : "border-white/10 hover:border-white/25"
-                    }`}
-                  >
-                    <div className="aspect-[4/3] bg-neutral-900">
-                      <img
-                        src={img.medium || img.thumb || PLACEHOLDER}
-                        srcSet={`${img.medium || img.thumb || PLACEHOLDER} 1x, ${img.large || img.medium || img.thumb || PLACEHOLDER} 2x`}
-                        alt={img.title || "Library image"}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition" />
-                    <div className="absolute bottom-0 left-0 right-0 p-3 flex items-center justify-between text-sm text-white bg-gradient-to-t from-black/70 via-black/40 to-transparent">
-                      <span className="truncate">{img.title || img.filename || `Image #${img.id}`}</span>
-                      {img.hasEditedReplacement && (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-500/80 text-[11px] uppercase">Edited</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
-        <aside className="col-span-12 lg:col-span-3 space-y-4">
-          <div className="bg-white/5 border border-white/10 rounded-2xl p-4 shadow-xl shadow-black/30 space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.25em] text-neutral-400">Content</p>
-                <h2 className="text-lg font-semibold text-white">Details</h2>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-neutral-300">
-                <span className="h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_0_6px_rgba(251,191,36,0.15)]" />
-                <span>Album</span>
-              </div>
-            </div>
-
-            {!selectedImage && <p className="text-neutral-400 text-sm">Select an image to see metadata.</p>}
-
-            {selectedImage && (
-              <div className="space-y-3">
-                <div className="rounded-xl overflow-hidden border border-white/10 bg-neutral-900">
-                  <img
-                    src={selectedImage.medium || selectedImage.thumb || PLACEHOLDER}
-                    alt={selectedImage.title || "Selected image"}
-                    className="w-full h-44 object-cover"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div>
-                    <h3 className="text-base font-semibold text-white leading-tight">
-                      {selectedImage.title || selectedImage.filename || `Image #${selectedImage.id}`}
-                    </h3>
-                    <p className="text-xs text-neutral-400">ID: {selectedImage.id}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 text-sm text-neutral-300">
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-2">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400">Album</p>
-                      <p className="font-semibold text-white truncate">{albumDetails?.title || "—"}</p>
-                    </div>
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-2">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400">Filename</p>
-                      <p className="font-semibold text-white truncate">{selectedImage.filename || "—"}</p>
-                    </div>
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-2">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400">Visibility</p>
-                      <p className="font-semibold text-white">Visible</p>
-                    </div>
-                    <div className="bg-white/5 border border-white/10 rounded-lg p-2">
-                      <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400">Captured</p>
-                      <p className="font-semibold text-white">{formatTimestamp(albumDetails?.created_on) || "—"}</p>
-                    </div>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 rounded-lg p-3 text-sm text-neutral-300">
-                    <p className="text-[11px] uppercase tracking-[0.2em] text-neutral-400 mb-1">Replacement</p>
-                    <p>
-                      {selectedImage.hasEditedReplacement
-                        ? "Has an edited replacement attached"
-                        : "Original upload from Koken"}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button className="flex-1 h-10 rounded-lg border border-white/10 bg-white/5 text-sm text-white hover:bg-white/10 transition">
-                      Toggle visibility
-                    </button>
-                    <button className="flex-1 h-10 rounded-lg border border-white/10 bg-gradient-to-r from-amber-500 to-rose-500 text-sm font-semibold text-white shadow-lg shadow-amber-900/30 hover:from-amber-400 hover:to-rose-400 transition">
-                      Use as album cover
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </aside>
-      </div>
+        </div>
+      )}
     </div>
   );
 }
